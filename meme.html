@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>드래그 크기 조절이 지원되는 이미지 에디터</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --primary: #3b82f6; --secondary: #10b981; --danger: #ef4444; --preset: #8b5cf6; --x-color: #0f1419;
+            --bg: #f3f4f6; --border: #e5e7eb; --panel-bg: #ffffff;
+        }
+        * { box-sizing: border-box; }
+        body { font-family: 'Pretendard', 'Noto Sans KR', sans-serif; margin: 0; display: flex; height: 100vh; background: var(--bg); overflow: hidden; }
+        
+        #sidebar { width: 420px; background: var(--panel-bg); border-right: 1px solid var(--border); overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 2px 0 5px rgba(0,0,0,0.05); z-index: 10; }
+        h2 { margin-top: 0; margin-bottom: 5px; font-size: 1.1rem; color: #333; font-weight: 700; }
+        h3 { margin: 0 0 10px 0; font-size: 1rem; display: flex; justify-content: space-between; align-items: center; }
+        hr { width: 100%; border: 0; border-top: 1px solid var(--border); margin: 8px 0; }
+
+        .control-group { border: 1px solid var(--border); padding: 15px; border-radius: 8px; margin-bottom: 12px; background: #fafafa; transition: all 0.2s; }
+        
+        .btn-sm { padding: 4px 8px; font-size: 0.8rem; border-radius: 4px; cursor: pointer; border: none; margin-left: 5px; transition: 0.2s; }
+        .btn-blue { background: var(--primary); color: white; } .btn-blue:hover { background: #2563eb; }
+        .btn-remove { background: var(--danger); color: white; } .btn-remove:hover { background: #dc2626; }
+        .btn-duplicate { background: var(--secondary); color: white; } .btn-duplicate:hover { background: #059669; }
+        
+        button.main-btn { width: 100%; padding: 10px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-green { background: var(--secondary); color: white; } .btn-green:hover { background: #059669; }
+        .btn-dark { background: #374151; color: white; } .btn-dark:hover { background: #1f2937; }
+        .btn-purple { background: var(--preset); color: white; } .btn-purple:hover { background: #7c3aed; }
+        .btn-x { background: var(--x-color); color: white; } .btn-x:hover { background: #272c30; }
+        
+        .style-btn-group { display: flex; flex-wrap: wrap; gap: 4px; }
+        .style-btn-group button { padding: 6px 10px; background: white; border: 1px solid #d1d5db; cursor: pointer; flex: 1; transition: 0.2s; border-radius: 4px; }
+        .style-btn-group button:hover { background: #f3f4f6; }
+        .style-btn-group button.active { background: var(--primary); color: white; border-color: var(--primary); z-index: 1; font-weight: bold; }
+
+        label { display: block; font-size: 0.85rem; margin-top: 10px; margin-bottom: 5px; color: #555; font-weight: 500; }
+        input, textarea, select { width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-family: inherit; }
+        input[type="range"] { padding: 0; cursor: pointer; }
+        input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
+        input[type="checkbox"] { width: auto; transform: scale(1.2); cursor: pointer; }
+        textarea { resize: vertical; min-height: 60px; }
+        .flex-row { display: flex; gap: 8px; align-items: center; }
+        
+        #main { flex: 1; padding: 30px; display: flex; flex-direction: column; background: #e5e7eb; overflow: auto; position: relative; }
+        #canvas-container { 
+            flex: 1; border-radius: 4px;
+            display: flex; justify-content: center; align-items: center;
+            overflow: hidden; position: relative;
+        }
+        
+        #workspace { 
+            position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.1); transform-origin: center center;
+            background: white;
+            background-image: linear-gradient(45deg, #f0f0f0 25%, transparent 25%), linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #f0f0f0 75%), linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+            background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+
+        #workspace.ratio-set { overflow: visible; }
+        #workspace.ratio-set::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 2px dashed #3b82f6; box-shadow: 0 0 0 9999px rgba(0,0,0,0.55); pointer-events: none; z-index: 999; transition: opacity 0.2s; }
+        #workspace.exporting { overflow: hidden !important; background: transparent; }
+        #workspace.exporting::before { display: none; }
+        /* 내보내기 중: 선택/호버 가이드라인을 transition 없이 즉시 숨김 */
+        /* transition이 있으면 0.2초간 핑크 테두리가 남아 내보내기 이미지에 포함되는 버그 방지 */
+        #workspace.exporting .layer::after,
+        #workspace.exporting #bg-layer::after { border-color: transparent !important; transition: none !important; }
+        
+        /* bottom:-2px: html2canvas sub-pixel 렌더링 시 마지막 1-2px에 그라데이션이 닿지 않는 문제 방지 */
+        /* workspace의 overflow:hidden(exporting 시)이 -2px 초과 부분을 정확히 잘라주므로 안전 */
+        #canvas-gradient { position: absolute; bottom: -2px; left: 0; width: 100%; height: calc(50% + 2px); pointer-events: none; z-index: 5; background: none; transition: 0.2s; }
+        /* line-height: 0으로 img 아래 생기는 인라인 공백(흰 줄)을 제거 */
+        #bg-layer { position: absolute; top: 0; left: 0; cursor: move; line-height: 0; font-size: 0; }
+        #bg-image { display: block; width: 100%; height: 100%; pointer-events: none; user-select: none; }
+        
+        .layer { position: absolute; cursor: move; user-select: none; z-index: 10; }
+        .layer::after { content: ''; position: absolute; top: -5px; left: -5px; right: -5px; bottom: -5px; border: 1px dashed transparent; pointer-events: none; transition: 0.2s; z-index: -1; }
+        .layer:hover::after, #bg-layer:hover::after { border-color: rgba(59, 130, 246, 0.5); }
+        .layer.text-layer { white-space: pre-wrap; word-break: break-all; box-sizing: border-box; }
+        
+        .layer.selected::after { border: 2px solid #ec4899; }
+        .selection-box { position: absolute; border: 1px solid #3b82f6; background-color: rgba(59, 130, 246, 0.2); z-index: 9999; pointer-events: none; }
+
+        .resize-handle { position: absolute; right: -6px; bottom: -6px; width: 14px; height: 14px; background-color: white; border: 2px solid var(--primary); border-radius: 50%; cursor: nwse-resize; opacity: 0; transition: opacity 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.3); z-index: 20; }
+        .layer:hover .resize-handle, #bg-layer:hover .resize-handle { opacity: 1; }
+
+        #drop-msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #6b7280; pointer-events: none; z-index: 100; background: rgba(255,255,255,0.8); padding: 10px 20px; border-radius: 8px; }
+        #drop-msg.hidden { display: none; }
+
+        #modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.65); z-index: 9999; display: flex; justify-content: center; align-items: flex-start; padding-top: 40px; opacity: 0; pointer-events: none; transition: 0.2s; }
+        #modal-overlay.active { opacity: 1; pointer-events: auto; }
+        .x-header { display: flex; gap: 10px; margin-bottom: 14px; }
+        .x-avatar { width: 48px; height: 48px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; flex-shrink: 0; }
+        .x-name { font-weight: bold; color: #0f1419; } .x-handle { color: #536471; font-size: 0.9rem; }
+        /* 💡 툴팁 CSS 대신 자동완성(드롭다운) CSS 추가 */
+        .autocomplete-wrapper { position: relative; flex: 2; }
+        .autocomplete-list { position: absolute; z-index: 1000; top: 100%; left: 0; right: 0; background: white; border: 1px solid #d1d5db; border-top: none; border-radius: 0 0 6px 6px; max-height: 200px; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1); padding: 0; margin: 0; list-style: none; display: none; }
+        .autocomplete-item { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f3f4f6; font-size: 0.9rem; transition: background 0.1s; }
+        .autocomplete-item:last-child { border-bottom: none; }
+        .autocomplete-item:hover { background-color: #f3f4f6; }
+        .autocomplete-item .flag-icon { width: 18px; margin-right: 8px; vertical-align: middle; border: 1px solid #ddd; }
+
+        /* ── X.com 포스팅 룸 ── */
+        .x-toolbar { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; align-items: center; }
+        .x-tool-btn { padding: 5px 11px; background: white; border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer; font-size: 0.85rem; transition: 0.15s; }
+        .x-tool-btn:hover { background: #f1f5f9; border-color: #94a3b8; }
+        .x-tool-btn:active { background: #e2e8f0; }
+        #x-post-editor {
+            min-height: 130px; border: 1px solid #d1d5db; border-radius: 6px;
+            padding: 10px 12px; font-family: inherit; font-size: 0.95rem; line-height: 1.65;
+            outline: none; word-break: break-word; white-space: pre-wrap;
+            margin-bottom: 6px; background: white; color: #0f1419;
+        }
+        #x-post-editor:focus { border-color: #1d9bf0; box-shadow: 0 0 0 2px rgba(29,155,240,0.18); }
+        #x-post-editor:empty::before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; display: block; }
+        .emoji-palette { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 10px; padding: 7px 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; }
+        .emoji-palette button { background: none; border: 1px solid transparent; border-radius: 5px; padding: 3px 6px; font-size: 1.15rem; cursor: pointer; transition: 0.12s; line-height: 1; }
+        .emoji-palette button:hover { background: #e2e8f0; border-color: #cbd5e1; }
+        .x-char-count { text-align: right; font-size: 0.78rem; color: #536471; margin-bottom: 8px; }
+        .x-char-count.over { color: #f4212e; font-weight: bold; }
+        /* 실시간 미리보기 카드 */
+        .x-live-preview { border: 1px solid #cfd9de; border-radius: 12px; padding: 14px 16px; background: white; margin-bottom: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .xp-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .xp-avatar { width: 40px; height: 40px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; flex-shrink: 0; }
+        .xp-name { font-weight: 700; font-size: 0.88rem; color: #0f1419; line-height: 1.3; }
+        .xp-handle { font-size: 0.82rem; color: #536471; }
+        .xp-body { font-size: 0.93rem; color: #0f1419; line-height: 1.65; min-height: 28px; word-break: break-word; white-space: pre-wrap; }
+        .xp-body b, .xp-body strong { font-weight: 800; }
+        .xp-footer { margin-top: 12px; font-size: 0.8rem; color: #536471; display: flex; gap: 18px; border-top: 1px solid #eff3f4; padding-top: 10px; }
+        .xp-footer span { cursor: default; }
+        /* 모달 확장 */
+        #x-card { background: white; width: 620px; max-width: 95vw; border-radius: 16px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); max-height: 92vh; overflow-y: auto; }
+        #x-preview-text { font-size: 1rem; color: #0f1419; margin-bottom: 14px; word-break: break-word; line-height: 1.65; }
+        #x-preview-text b, #x-preview-text strong { font-weight: 800; }
+        #x-preview-img-container img { width: 100%; border-radius: 10px; border: 1px solid #cfd9de; display: block; }
+        .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+        .x-section-label { font-size: 0.78rem; font-weight: 700; color: #1d9bf0; margin-bottom: 6px; letter-spacing: 0.02em; }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h2>캔버스 비율</h2>
+        <div class="style-btn-group" id="ratio-buttons">
+            <button onclick="setCanvasRatio('free', this)" class="active">원본</button>
+            <button onclick="setCanvasRatio('16:9', this)">16:9</button>
+            <button onclick="setCanvasRatio('9:16', this)">9:16</button>
+            <button onclick="setCanvasRatio('1:1', this)">1:1</button>
+            <button onclick="setCanvasRatio('twitter', this)">X.com (최적)</button>
+        </div>
+        <hr>
+
+        <h2>캔버스 전체 효과</h2>
+        <div class="control-group" style="background: #eef2ff; border-color: #c7d2fe; padding: 12px;">
+            <div class="flex-row">
+                <input type="checkbox" id="global-grad-on" onchange="updateGlobalGradient()"> <span style="font-size: 0.85rem; font-weight: bold;">하단 그라데이션 켜기</span>
+                <input type="color" id="global-grad-color" value="#000000" oninput="updateGlobalGradient()">
+            </div>
+            <div class="flex-row" style="margin-top: 8px;">
+                <span style="font-size: 0.75rem;">진하기</span><input type="range" id="global-grad-alpha" min="10" max="100" value="80" oninput="updateGlobalGradient()">
+                <span style="font-size: 0.75rem;">높이(%)</span><input type="range" id="global-grad-height" min="10" max="100" value="50" oninput="updateGlobalGradient()">
+            </div>
+        </div>
+
+        <h2>다중 선택 / 그룹화</h2>
+        <div class="flex-row">
+            <button class="main-btn btn-dark" style="flex:1;" onclick="groupSelected()">🔗 그룹 묶기</button>
+            <button class="main-btn" style="flex:1; background:#9ca3af; color:white;" onclick="ungroupSelected()">분리하기</button>
+        </div>
+        <span style="font-size: 0.75rem; color: #666; text-align: center;">배경을 드래그하여 다중 선택하세요.</span>
+        <hr>
+
+        <h2>프리셋 및 파일</h2>
+        <input type="file" id="bg-input" accept="image/*" style="display:none;">
+        <button class="main-btn btn-blue" onclick="document.getElementById('bg-input').click()">📁 배경 이미지 열기</button>
+        <!-- Ctrl+V 붙여넣기 안내 -->
+        <p style="font-size: 0.78rem; color: #888; margin: 4px 0 0 0; text-align: center;">또는 Ctrl+V로 클립보드 이미지 붙여넣기</p>
+        
+        <div class="flex-row" style="margin-top: 8px;">
+            <button class="main-btn btn-purple" style="flex:1;" onclick="exportPreset()">📥 저장</button>
+            <input type="file" id="preset-input" accept=".json" style="display:none;" onchange="importPreset(event)">
+            <button class="main-btn btn-purple" style="flex:1;" onclick="document.getElementById('preset-input').click()">📤 불러오기</button>
+        </div>
+        <button class="main-btn btn-dark" style="margin-top: 8px;" onclick="downloadImage()">💾 최종 이미지 다운로드</button>
+        
+        <!-- 배경 이미지 중앙 정렬 버튼 -->
+        <div class="flex-row" style="margin-top: 8px;">
+            <button class="main-btn" style="flex:1; background:#0ea5e9; color:white;" onclick="centerBgX()" title="배경 이미지를 X축(가로) 방향 정중앙으로 이동">⬌ X축 중앙 정렬</button>
+            <button class="main-btn" style="flex:1; background:#f59e0b; color:white;" onclick="centerBgY()" title="배경 이미지를 Y축(세로) 방향 정중앙으로 이동">⬍ Y축 중앙 정렬</button>
+        </div>
+        <span style="font-size: 0.75rem; color: #888; text-align: center; display: block; margin-top: 2px;">배경 이미지를 캔버스 정중앙에 위치시킵니다.</span>
+
+        <hr>
+        
+        <h2>X.com 포스팅 룸</h2>
+        <div class="control-group" style="padding: 14px; border-color: #1d9bf0; border-width: 2px; background: #f0f9ff;">
+
+            <!-- 툴바 -->
+            <div class="x-toolbar">
+                <button class="x-tool-btn" id="bold-btn" title="볼드체 (Ctrl+B)" onclick="applyXBold()"><b>B</b> 볼드</button>
+                <button class="x-tool-btn" title="불릿포인트 삽입" onclick="insertXBullet()">• 불릿</button>
+                <span style="font-size: 0.72rem; color: #94a3b8; margin-left: auto; align-self: center;">Ctrl+B = 볼드체</span>
+            </div>
+
+            <!-- contenteditable 입력 -->
+            <div id="x-post-editor" contenteditable="true"
+                 data-placeholder="X에 올릴 게시글 내용을 입력하세요..."></div>
+
+            <!-- 글자 수 -->
+            <div class="x-char-count" id="x-char-count">0 / 280</div>
+
+            <!-- 이모지 팔레트 -->
+            <div class="x-section-label">이모지 삽입</div>
+            <div class="emoji-palette">
+                <button onclick="insertXEmoji('🚨')" title="사이렌">🚨</button>
+                <button onclick="insertXEmoji('👏')" title="박수">👏</button>
+                <button onclick="insertXEmoji('⚡')" title="번개">⚡</button>
+                <button onclick="insertXEmoji('😄')" title="웃음">😄</button>
+                <button onclick="insertXEmoji('🤮')" title="역겨움">🤮</button>
+                <button onclick="insertXEmoji('🪙')" title="코인">🪙</button>
+                <button onclick="insertXEmoji('📍')" title="위치">📍</button>
+                <button onclick="insertXEmoji('🔥')" title="불꽃">🔥</button>
+                <button onclick="insertXEmoji('💀')" title="해골">💀</button>
+                <button onclick="insertXEmoji('🤡')" title="광대">🤡</button>
+                <button onclick="insertXEmoji('🌍')" title="지구">🌍</button>
+                <button onclick="insertXEmoji('📢')" title="확성기">📢</button>
+                <button onclick="insertXEmoji('💰')" title="돈">💰</button>
+                <button onclick="insertXEmoji('📈')" title="상승">📈</button>
+                <button onclick="insertXEmoji('📉')" title="하락">📉</button>
+                <button onclick="insertXEmoji('🔴')" title="빨간점">🔴</button>
+                <button onclick="insertXEmoji('✅')" title="체크">✅</button>
+                <button onclick="insertXEmoji('❌')" title="엑스">❌</button>
+                <button onclick="insertXEmoji('⚠️')" title="경고">⚠️</button>
+                <button onclick="insertXEmoji('🧵')" title="스레드">🧵</button>
+                <button onclick="insertXEmoji('😂')" title="웃음">😂</button>
+                <button onclick="insertXEmoji('😭')" title="울음">😭</button>
+                <button onclick="insertXEmoji('🫡')" title="경례">🫡</button>
+                <button onclick="insertXEmoji('👀')" title="눈">👀</button>
+            </div>
+
+            <!-- 실시간 X.com 미리보기 -->
+            <div class="x-section-label">실시간 미리보기</div>
+            <div class="x-live-preview">
+                <div class="xp-header">
+                    <div class="xp-avatar"></div>
+                    <div>
+                        <div class="xp-name">Premium Jazz Lounge</div>
+                        <div class="xp-handle">@jazz_lover</div>
+                    </div>
+                </div>
+                <div class="xp-body" id="xp-live-body"><span style="color:#9ca3af; font-style:italic; font-size:0.88rem;">게시글을 입력하면 여기에 미리보기가 표시됩니다.</span></div>
+                <div class="xp-footer">
+                    <span>💬 0</span><span>🔁 0</span><span>♡ 0</span><span>📊</span>
+                </div>
+            </div>
+
+            <button class="main-btn btn-x" onclick="openXPreview()">🐦 X.com 미리보기 & 게시</button>
+        </div>
+
+        <hr>
+        <h2>레이어 추가</h2>
+        <button class="main-btn btn-green" onclick="addTextLayer()">+ 텍스트 추가</button>
+        <div class="flex-row" style="margin-top: 8px;">
+            <button class="main-btn btn-green" style="flex:1;" onclick="addShapeLayer('rect')">+ 사각형</button>
+            <button class="main-btn btn-green" style="flex:1;" onclick="addShapeLayer('line')">+ 선</button>
+        </div>
+        
+        <div class="control-group" style="padding: 12px; margin-top: 12px; border-color: #cbd5e1;">
+            <label style="margin-top:0;">미리보기 키워드 삽입</label>
+            <div class="flex-row">
+                <select id="keyword-select" style="flex: 2; padding: 8px;">
+                    <option value="🚨속보🚨">🚨속보🚨</option>
+                    <option value="😜유머😜">😜유머😜</option>
+                    <option value="🏛️정치🏛️">🏛️정치🏛️</option>
+                    <option value="🌐세계">🌐세계</option>
+                    <option value="📈 증시📉">📈 증시📉</option>
+                    <option value="🪙암호화폐🪙">🪙암호화폐🪙</option>
+                    <option value="💰환율💰">💰환율💰</option>
+                </select>
+                <button class="btn-sm btn-blue" style="flex: 1; padding: 8px; font-weight: bold;" onclick="addKeywordLayer()">추가</button>
+            </div>
+            
+            <label>국기 이모지 삽입</label>
+            <div class="flex-row" style="align-items: flex-start;">
+                <div class="autocomplete-wrapper">
+                    <input type="text" id="flag-search" placeholder="국가명 (예: 한국, 미국)" style="padding: 8px; margin: 0; width: 100%;" autocomplete="off">
+                    <ul id="flag-autocomplete" class="autocomplete-list"></ul>
+                </div>
+                <button class="btn-sm btn-blue" style="flex: 1; padding: 8px; font-weight: bold; height: 36px; margin-left: 8px;" onclick="addFlagLayer()">추가</button>
+            </div>
+        </div>
+        <hr>
+
+        <div id="layers-panel"></div>
+    </div>
+
+    <div id="main">
+        <div id="canvas-container">
+            <div id="drop-msg"><h3>이미지를 여기에 드래그하세요</h3></div>
+            <div id="workspace">
+                <div id="bg-layer"><img id="bg-image" src="" alt=""></div>
+                <div id="canvas-gradient"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-overlay">
+        <div id="x-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #eff3f4; padding-bottom: 14px; margin-bottom: 16px;">
+                <h2 style="margin:0; font-size:1.1rem; color:#0f1419;">게시글 최종 미리보기</h2>
+                <button onclick="closeModal()" style="background:none; border:none; font-size:1.3rem; cursor:pointer; color:#536471; padding:4px;">✕</button>
+            </div>
+            <div class="x-header">
+                <div class="x-avatar"></div>
+                <div>
+                    <div class="x-name">Premium Jazz Lounge</div>
+                    <div class="x-handle">@jazz_lover · 방금</div>
+                </div>
+            </div>
+            <div id="x-preview-text"></div>
+            <div id="x-preview-img-container" style="margin-bottom: 14px;">
+                <img id="x-preview-img" src="" alt="preview">
+            </div>
+            <div class="modal-actions">
+                <button class="main-btn btn-dark" style="background:#64748b; flex:1;" onclick="closeModal()">취소</button>
+                <button class="main-btn btn-x" style="flex:2;" onclick="postToX()">🐦 X.com에 게시하기</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const fonts = [
+            "Pretendard", "Gowun Dodum", "Gowun Batang", "Noto Sans KR", "Noto Serif KR", "Nanum Gothic", "Nanum Myeongjo", "Do Hyeon", "Jua", "Hahmlet", "Gmarket Sans", "Montserrat", "Roboto", "Open Sans", "Oswald", "Playfair Display"
+        ];
+        const fontUrl = `https://fonts.googleapis.com/css2?family=${fonts.map(f => f.replace(/ /g, '+')).join(':wght@400;700&family=')}:wght@400;700&display=swap`;
+        const fontLink = document.createElement('link'); fontLink.rel = 'stylesheet'; fontLink.href = fontUrl; document.head.appendChild(fontLink);
+
+        let layerCount = 0;
+        let groupCounter = 0;
+        let currentRatio = 'free';
+        const workspace = document.getElementById('workspace');
+        const layersPanel = document.getElementById('layers-panel');
+        const bgLayer = document.getElementById('bg-layer');
+        const bgImage = document.getElementById('bg-image');
+        const canvasContainer = document.getElementById('canvas-container');
+        const canvasGradient = document.getElementById('canvas-gradient');
+
+        // 💡 100여 개 국가 데이터 확장 (팔레스타인, 네팔, 몽골, 레바논, 이란, 이스라엘 등 포함)
+        const flagMap = {
+            "한국": "kr", "대한민국": "kr", "미국": "us", "일본": "jp", "중국": "cn",
+            "영국": "gb", "프랑스": "fr", "독일": "de", "이탈리아": "it", "캐나다": "ca",
+            "호주": "au", "러시아": "ru", "인도": "in", "브라질": "br", "스페인": "es",
+            "멕시코": "mx", "베트남": "vn", "태국": "th", "필리핀": "ph", "인도네시아": "id",
+            "싱가포르": "sg", "말레이시아": "my", "대만": "tw", "홍콩": "hk", "스위스": "ch",
+            "네덜란드": "nl", "스웨덴": "se", "노르웨이": "no", "덴마크": "dk", "핀란드": "fi",
+            "아르헨티나": "ar", "칠레": "cl", "페루": "pe", "콜롬비아": "co", "베네수엘라": "ve",
+            "뉴질랜드": "nz", "이집트": "eg", "남아공": "za", "모로코": "ma", "나이지리아": "ng",
+            "케냐": "ke", "알제리": "dz", "에티오피아": "et", "가나": "gh", "사우디아라비아": "sa",
+            "아랍에미리트": "ae", "UAE": "ae", "튀르키예": "tr", "터키": "tr", "이란": "ir",
+            "이스라엘": "il", "팔레스타인": "ps", "레바논": "lb", "이라크": "iq", "시리아": "sy",
+            "카타르": "qa", "쿠웨이트": "kw", "오만": "om", "예멘": "ye", "요르단": "jo",
+            "네팔": "np", "몽골": "mn", "아프가니스탄": "af", "파키스탄": "pk", "방글라데시": "bd",
+            "스리랑카": "lk", "미얀마": "mm", "캄보디아": "kh", "라오스": "la", "브루나이": "bn",
+            "우크라이나": "ua", "폴란드": "pl", "그리스": "gr", "포르투갈": "pt", "아일랜드": "ie",
+            "오스트리아": "at", "벨기에": "be", "체코": "cz", "헝가리": "hu", "루마니아": "ro",
+            "불가리아": "bg", "세르비아": "rs", "크로아티아": "hr", "슬로바키아": "sk", "슬로베니아": "si",
+            "에스토니아": "ee", "라트비아": "lv", "리투아니아": "lt", "아이스란드": "is", "룩셈부르크": "lu",
+            "유럽연합": "eu", "EU": "eu", "유엔": "un", "UN": "un",
+            "아르메니아": "am", "아제르바이잔": "az", "조지아": "ge", "카자흐스탄": "kz", "우즈베키스탄": "uz",
+            "쿠바": "cu", "자메이카": "jm", "파나마": "pa", "아이티": "ht", "도미니카공화국": "do",
+            "볼리비아": "bo", "파라과이": "py", "우루과이": "uy", "에콰도르": "ec",
+            "마카오": "mo", "조선민주주의인민공화국": "kp", "북한": "kp"
+        };
+
+        dragElement(bgLayer);
+        makeResizable(bgLayer, 'image');
+
+        function hexToRgb(hex) {
+            let bigint = parseInt(hex.slice(1), 16);
+            return `${(bigint >> 16) & 255}, ${(bigint >> 8) & 255}, ${bigint & 255}`;
+        }
+
+        function updateGlobalGradient() {
+            const isOn = document.getElementById('global-grad-on').checked;
+            const color = document.getElementById('global-grad-color').value;
+            const alpha = document.getElementById('global-grad-alpha').value / 100;
+            const height = document.getElementById('global-grad-height').value;
+
+            if (isOn) {
+                const rgb = hexToRgb(color);
+                canvasGradient.style.height = height + '%';
+                canvasGradient.style.backgroundImage = `linear-gradient(to top, rgba(${rgb}, ${alpha}) 0%, rgba(${rgb}, 0) 100%)`;
+            } else {
+                canvasGradient.style.backgroundImage = 'none';
+            }
+        }
+
+        function setCanvasRatio(ratio, btn) {
+            currentRatio = ratio;
+            document.querySelectorAll('#ratio-buttons button').forEach(b => b.classList.remove('active'));
+            if(btn) btn.classList.add('active');
+
+            let w, h;
+            if (ratio === '16:9') { w = 1280; h = 720; }
+            else if (ratio === '9:16') { w = 720; h = 1280; }
+            else if (ratio === '1:1') { w = 1080; h = 1080; }
+            else if (ratio === 'twitter') { w = 1200; h = 675; }
+
+            if (ratio === 'free') {
+                workspace.classList.remove('ratio-set');
+                if (bgImage.naturalWidth) {
+                    workspace.style.width = bgImage.naturalWidth + 'px';
+                    workspace.style.height = bgImage.naturalHeight + 'px';
+                    bgLayer.style.width = bgImage.naturalWidth + 'px';
+                    bgLayer.style.height = bgImage.naturalHeight + 'px';
+                    bgLayer.style.left = '0px'; bgLayer.style.top = '0px';
+                }
+            } else {
+                workspace.classList.add('ratio-set');
+                workspace.style.width = w + 'px';
+                workspace.style.height = h + 'px';
+                
+                if (bgImage.naturalWidth) {
+                    const imgRatio = bgImage.naturalWidth / bgImage.naturalHeight;
+                    const frameRatio = w / h;
+                    let newW, newH;
+                    if (imgRatio > frameRatio) { newH = h; newW = h * imgRatio; } 
+                    else { newW = w; newH = w / imgRatio; }
+                    bgLayer.style.width = newW + 'px'; bgLayer.style.height = newH + 'px';
+                    bgLayer.style.left = -((newW - w) / 2) + 'px'; bgLayer.style.top = -((newH - h) / 2) + 'px';
+                }
+            }
+            fitWorkspaceToContainer();
+        }
+
+        function handleImageLoad(file) {
+            if (!file || !file.type.startsWith('image/')) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                bgImage.src = e.target.result;
+                bgImage.onload = () => {
+                    document.getElementById('drop-msg').classList.add('hidden');
+                    if (currentRatio === 'free') {
+                        workspace.style.width = bgImage.naturalWidth + 'px'; workspace.style.height = bgImage.naturalHeight + 'px';
+                        bgLayer.style.width = bgImage.naturalWidth + 'px'; bgLayer.style.height = bgImage.naturalHeight + 'px';
+                        bgLayer.style.left = '0px'; bgLayer.style.top = '0px';
+                    } else {
+                        setCanvasRatio(currentRatio, document.querySelector('#ratio-buttons button.active'));
+                    }
+                    fitWorkspaceToContainer();
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function fitWorkspaceToContainer() {
+            const w = parseInt(workspace.style.width); const h = parseInt(workspace.style.height);
+            if (!w || !h) return;
+             const scale = Math.min((canvasContainer.clientWidth - 80) / w, (canvasContainer.clientHeight - 80) / h, 1);
+             workspace.style.transform = `scale(${scale})`;
+        }
+        window.addEventListener('resize', fitWorkspaceToContainer);
+
+        document.getElementById('bg-input').addEventListener('change', (e) => handleImageLoad(e.target.files[0]));
+        canvasContainer.addEventListener('dragover', (e) => e.preventDefault());
+        canvasContainer.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer.files.length) handleImageLoad(e.dataTransfer.files[0]); });
+
+        // ─────────────────────────────────────────────────
+        // Ctrl+V 클립보드 붙여넣기: 텍스트 입력창(textarea/input)이
+        // 포커스 상태일 때는 동작하지 않도록 예외 처리
+        // ─────────────────────────────────────────────────
+        document.addEventListener('paste', (e) => {
+            const activeTag = document.activeElement.tagName.toLowerCase();
+            // textarea나 input에 포커스가 있으면 붙여넣기 기능 건드리지 않음
+            if (activeTag === 'textarea' || activeTag === 'input') return;
+
+            const items = e.clipboardData?.items;
+            if (!items) return;
+
+            for (const item of items) {
+                if (item.type.startsWith('image/')) {
+                    const file = item.getAsFile();
+                    if (file) {
+                        handleImageLoad(file);
+                        // 기본 붙여넣기 동작 방지
+                        e.preventDefault();
+                        break;
+                    }
+                }
+            }
+        });
+
+        function exportCanvas(callback) {
+            if (!bgImage.src && currentRatio === 'free') { alert("먼저 배경 이미지를 불러오거나 비율을 선택해주세요."); return; }
+            document.querySelectorAll('.resize-handle, .selection-box').forEach(h => h.style.display = 'none');
+            document.querySelectorAll('.layer').forEach(l => l.classList.remove('selected'));
+            workspace.classList.add('exporting');
+            
+            const originalTransform = workspace.style.transform;
+            const originalBoxShadow = workspace.style.boxShadow;
+            workspace.style.transform = 'none';
+            // box-shadow가 캔버스 경계 바깥으로 렌더링되어 크기 계산이 틀어지는 것을 방지
+            workspace.style.boxShadow = 'none';
+
+            // 워크스페이스의 정확한 정수 크기를 가져옴
+            // → scale:2 반올림 오류로 마지막 픽셀 행이 비는 현상 방지
+            const wsWidth = Math.round(parseFloat(workspace.style.width));
+            const wsHeight = Math.round(parseFloat(workspace.style.height));
+
+            html2canvas(workspace, {
+                // null: 이미지가 닿지 않는 빈 픽셀을 흰색이 아닌 투명으로 처리
+                // '#ffffff' 이었을 때 → 마지막 1~2px 공백이 흰 줄로 나타남
+                backgroundColor: null,
+                scale: 2,
+                useCORS: true,
+                width: wsWidth,    // 캡처 영역을 워크스페이스 크기와 정확히 일치
+                height: wsHeight,
+                scrollX: 0,        // 페이지 스크롤 오프셋 오류 방지
+                scrollY: 0
+            }).then(canvas => {
+                workspace.style.transform = originalTransform;
+                workspace.style.boxShadow = originalBoxShadow;
+                workspace.classList.remove('exporting');
+                document.querySelectorAll('.resize-handle').forEach(h => h.style.display = '');
+                callback(canvas.toDataURL('image/png'));
+            });
+        }
+
+
+        function downloadImage() {
+            exportCanvas((dataUrl) => {
+                const link = document.createElement('a'); link.download = 'edited-image.png'; link.href = dataUrl; link.click();
+            });
+        }
+
+        // ── X.com 포스팅 룸 기능 ──────────────────────────────
+
+        let _xSavedRange = null; // 에디터 포커스 잃기 전 커서 위치 저장용
+
+        function _xGetEditor() { return document.getElementById('x-post-editor'); }
+
+        // 에디터에 포커스가 없을 때 커서 위치 복원 후 내용 삽입
+        function _xInsertAtCursor(text) {
+            const editor = _xGetEditor();
+            editor.focus();
+            const sel = window.getSelection();
+            let range;
+            if (_xSavedRange) {
+                range = _xSavedRange;
+                sel.removeAllRanges();
+                sel.addRange(range);
+                _xSavedRange = null;
+            } else if (sel.rangeCount > 0 && editor.contains(sel.getRangeAt(0).startContainer)) {
+                range = sel.getRangeAt(0);
+            } else {
+                // 커서가 없으면 맨 끝에 삽입
+                range = document.createRange();
+                range.selectNodeContents(editor);
+                range.collapse(false);
+            }
+            range.deleteContents();
+            const node = document.createTextNode(text);
+            range.insertNode(node);
+            range.setStartAfter(node);
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+            _xUpdateLivePreview();
+        }
+
+        function insertXEmoji(emoji) { _xInsertAtCursor(emoji); }
+        function insertXBullet() { _xInsertAtCursor('• '); }
+
+        function applyXBold() {
+            const editor = _xGetEditor();
+            editor.focus();
+            document.execCommand('bold', false, null);
+            _xUpdateLivePreview();
+        }
+
+        // 영문/숫자 → 유니코드 수학 볼드 변환 (X.com에서 실제 볼드로 표시됨)
+        function _toBoldUnicode(str) {
+            return [...str].map(c => {
+                const n = c.charCodeAt(0);
+                if (n >= 65 && n <= 90) return String.fromCodePoint(0x1D400 + n - 65); // A-Z
+                if (n >= 97 && n <= 122) return String.fromCodePoint(0x1D41A + n - 97); // a-z
+                if (n >= 48 && n <= 57)  return String.fromCodePoint(0x1D7CE + n - 48); // 0-9
+                return c; // 한국어 등 변환 불가 문자는 그대로
+            }).join('');
+        }
+
+        // contenteditable HTML → X.com 전송용 순수 텍스트 (볼드 태그는 유니코드 변환)
+        function _htmlToXText(rootEl) {
+            function walk(node, inBold) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    return inBold ? _toBoldUnicode(node.textContent) : node.textContent;
+                }
+                const tag = (node.tagName || '').toLowerCase();
+                if (tag === 'br') return '\n';
+                const bold = inBold || tag === 'b' || tag === 'strong';
+                if (tag === 'div' || tag === 'p') {
+                    return '\n' + Array.from(node.childNodes).map(n => walk(n, bold)).join('');
+                }
+                return Array.from(node.childNodes).map(n => walk(n, bold)).join('');
+            }
+            return walk(rootEl, false).replace(/^\n/, '');
+        }
+
+        function _xUpdateLivePreview() {
+            const editor = _xGetEditor();
+            const liveBody = document.getElementById('xp-live-body');
+            const html = editor.innerHTML;
+            const empty = !html || html === '<br>' || editor.innerText.trim() === '';
+            liveBody.innerHTML = empty
+                ? '<span style="color:#9ca3af; font-style:italic; font-size:0.88rem;">게시글을 입력하면 여기에 미리보기가 표시됩니다.</span>'
+                : html;
+            // 글자 수 업데이트
+            const count = [...(editor.innerText || '')].length;
+            const counter = document.getElementById('x-char-count');
+            counter.textContent = `${count} / 280`;
+            counter.className = 'x-char-count' + (count > 280 ? ' over' : '');
+        }
+
+        function openXPreview() {
+            const editor = _xGetEditor();
+            document.getElementById('x-preview-text').innerHTML = editor.innerHTML; // 볼드 포함 렌더링
+            exportCanvas((dataUrl) => {
+                document.getElementById('x-preview-img').src = dataUrl;
+                document.getElementById('modal-overlay').classList.add('active');
+            });
+        }
+
+        function closeModal() { document.getElementById('modal-overlay').classList.remove('active'); }
+
+        function postToX() {
+            const dataUrl = document.getElementById('x-preview-img').src;
+            const link = document.createElement('a'); link.download = 'x-post-image.png'; link.href = dataUrl; link.click();
+
+            const editor = _xGetEditor();
+            const plainText = _htmlToXText(editor); // 볼드 → 유니코드 변환된 텍스트
+            const xUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(plainText)}`;
+
+            alert("✅ 이미지가 다운로드되었습니다!\n\nX.com 창이 열리면 방금 다운로드된 이미지를 직접 끌어다 놓아 첨부해 주세요.");
+            window.open(xUrl, '_blank');
+            closeModal();
+        }
+
+        let selectionBox = null; let dragStartX, dragStartY; let isDraggingSelection = false;
+
+        canvasContainer.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.layer') || e.target.closest('.resize-handle') || e.target.closest('#bg-layer') || e.target.closest('#sidebar') || e.target.closest('#modal-overlay')) return;
+            
+            isDraggingSelection = true;
+            dragStartX = e.clientX; dragStartY = e.clientY;
+            
+            selectionBox = document.createElement('div');
+            selectionBox.className = 'selection-box';
+            selectionBox.style.left = e.clientX + 'px';
+            selectionBox.style.top = e.clientY + 'px';
+            document.body.appendChild(selectionBox);
+
+            document.querySelectorAll('.layer.selected').forEach(l => l.classList.remove('selected'));
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDraggingSelection || !selectionBox) return;
+            const currentX = e.clientX; const currentY = e.clientY;
+            const width = Math.abs(currentX - dragStartX); const height = Math.abs(currentY - dragStartY);
+            selectionBox.style.width = width + 'px'; selectionBox.style.height = height + 'px';
+            selectionBox.style.left = Math.min(currentX, dragStartX) + 'px';
+            selectionBox.style.top = Math.min(currentY, dragStartY) + 'px';
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isDraggingSelection && selectionBox) {
+                const boxRect = selectionBox.getBoundingClientRect();
+                document.querySelectorAll('.layer').forEach(layer => {
+                    const layerRect = layer.getBoundingClientRect();
+                    if (!(boxRect.right < layerRect.left || boxRect.left > layerRect.right || boxRect.bottom < layerRect.top || boxRect.top > layerRect.bottom)) {
+                        layer.classList.add('selected');
+                        const groupId = layer.dataset.groupId;
+                        if (groupId) document.querySelectorAll(`.layer[data-group-id="${groupId}"]`).forEach(g => g.classList.add('selected'));
+                    }
+                });
+                selectionBox.remove(); selectionBox = null; isDraggingSelection = false;
+            }
+        });
+
+        function groupSelected() {
+            const selected = document.querySelectorAll('.layer.selected');
+            if (selected.length < 2) return alert('그룹화하려면 2개 이상의 레이어를 선택해야 합니다.');
+            groupCounter++;
+            selected.forEach(el => el.dataset.groupId = 'group-' + groupCounter);
+        }
+        function ungroupSelected() { document.querySelectorAll('.layer.selected').forEach(el => delete el.dataset.groupId); }
+
+        function addKeywordLayer() {
+            const val = document.getElementById('keyword-select').value;
+            addTextLayer({ text: val, x: 250, y: 150 });
+        }
+
+        function addFlagLayer(presetCode = null, presetData = null) {
+            let code = presetCode;
+            let query = "국기";
+
+            if (!code) {
+                query = document.getElementById('flag-search').value.trim();
+                if (!query) return alert("국가명을 입력해주세요.");
+                code = flagMap[query];
+                if (!code) return alert("해당 국가의 국기를 찾을 수 없습니다. (예: 한국, 미국, 일본 등 입력)");
+            }
+
+            const id = ++layerCount;
+            const el = document.createElement('div');
+            el.id = `layer-${id}`; el.className = 'layer flag-layer'; el.dataset.type = 'flag';
+            el.dataset.flagCode = code;
+
+            const x = presetData?.x ?? 250; 
+            const y = presetData?.y ?? 150;
+            const w = presetData?.w ?? 80;
+
+            if(presetData?.groupId) el.dataset.groupId = presetData.groupId;
+
+            const imgUrl = `https://flagcdn.com/w160/${code}.png`;
+
+            el.style.left = x + 'px'; el.style.top = y + 'px'; el.style.width = w + 'px';
+            el.innerHTML = `<img src="${imgUrl}" style="width: 100%; height: auto; pointer-events: none; display: block;" crossorigin="anonymous">`;
+            
+            workspace.appendChild(el); dragElement(el); makeResizable(el, 'flag');
+
+            const controlHtml = `
+                <div class="control-group" id="control-${id}">
+                    <h3>국기 ${id} <div><button class="btn-sm btn-duplicate" onclick="duplicateLayer(${id}, 'flag')">복제</button><button class="btn-sm btn-remove" onclick="removeLayer(${id})">삭제</button></div></h3>
+                </div>`;
+            layersPanel.insertAdjacentHTML('afterbegin', controlHtml);
+        }
+
+        // ─────────────────────────────────────────────────
+        // 💡 국가 검색 자동완성 로직
+        // ─────────────────────────────────────────────────
+        const flagSearchInput = document.getElementById('flag-search');
+        const flagAutocompleteList = document.getElementById('flag-autocomplete');
+
+        // 입력할 때마다 자동완성 목록 필터링
+        flagSearchInput.addEventListener('input', function() {
+            const val = this.value.trim().toLowerCase();
+            flagAutocompleteList.innerHTML = '';
+            
+            if (!val) {
+                flagAutocompleteList.style.display = 'none';
+                return;
+            }
+
+            // 입력값이 포함된 국가명 찾기 (중복 코드 제거를 위해 Set 사용)
+            const matchedEntries = [];
+            const addedCodes = new Set();
+            for (const [name, code] of Object.entries(flagMap)) {
+                if (name.toLowerCase().includes(val) || code.toLowerCase().includes(val)) {
+                    // 대한민국, 한국 등 동일 국가 중복 표시 방지
+                    if (!addedCodes.has(code + name)) {
+                        matchedEntries.push({ name, code });
+                        addedCodes.add(code + name);
+                    }
+                }
+            }
+
+            if (matchedEntries.length > 0) {
+                flagAutocompleteList.style.display = 'block';
+                matchedEntries.forEach(entry => {
+                    const li = document.createElement('li');
+                    li.className = 'autocomplete-item';
+                    const imgUrl = `https://flagcdn.com/w20/${entry.code}.png`;
+                    li.innerHTML = `<img src="${imgUrl}" class="flag-icon" crossorigin="anonymous"> ${entry.name}`;
+                    
+                    // 리스트 아이템 클릭 시
+                    li.addEventListener('mousedown', function(e) {
+                        e.preventDefault(); // 인풋 포커스 아웃 방지
+                        flagSearchInput.value = entry.name;
+                        flagAutocompleteList.style.display = 'none';
+                        addFlagLayer(); // 바로 국기 삽입
+                        flagSearchInput.value = ''; // 삽입 후 초기화
+                    });
+                    
+                    flagAutocompleteList.appendChild(li);
+                });
+            } else {
+                flagAutocompleteList.style.display = 'none';
+            }
+        });
+
+        // 포커스 아웃 시 자동완성 닫기
+        flagSearchInput.addEventListener('blur', () => { setTimeout(() => flagAutocompleteList.style.display = 'none', 150); });
+        // 포커스 인 시 다시 열기
+        flagSearchInput.addEventListener('focus', function() { if(this.value.trim()) this.dispatchEvent(new Event('input')); });
+
+        // 💡 복구됨: 텍스트 레이어 생성 시 자간, 행간, 그림자 속성 적용
+        function addTextLayer(presetData = null) {
+            const id = ++layerCount;
+            const textEl = document.createElement('div');
+            textEl.id = `layer-${id}`; textEl.className = 'layer text-layer'; textEl.dataset.type = 'text';
+
+            const text = presetData?.text ?? '새로운 텍스트\n여기에 내용을 입력하세요.';
+            const x = presetData?.x ?? 100; const y = presetData?.y ?? 100;
+            const fontFamily = presetData?.fontFamily ?? 'Pretendard';
+            const fontSize = presetData?.fontSize ?? 40; 
+            const color = presetData?.color ?? '#ffffff';
+            const ls = presetData?.ls ?? '0'; const lh = presetData?.lh ?? '1.3';
+            const glow = presetData?.glow ?? '#000000'; const shadow = presetData?.shadow ?? '#000000';
+            const align = presetData?.align ?? 'left'; const fontWeight = presetData?.fontWeight ?? 'bold';
+
+            if(presetData?.groupId) textEl.dataset.groupId = presetData.groupId;
+
+            textEl.innerText = text; textEl.style.left = x + 'px'; textEl.style.top = y + 'px';
+            textEl.style.fontFamily = fontFamily; textEl.style.fontSize = fontSize + 'px'; textEl.style.fontWeight = fontWeight; textEl.style.color = color;
+            textEl.style.textAlign = align; textEl.style.letterSpacing = ls + 'px'; textEl.style.lineHeight = lh;
+            textEl.style.textShadow = `0 0 10px ${glow}, 0 0 20px ${glow}, 3px 3px 5px ${shadow}`;
+            
+            workspace.appendChild(textEl); dragElement(textEl); makeResizable(textEl, 'text');
+
+            // 💡 복구됨: 정렬 버튼, 폰트 크기 슬라이더, 자간/행간 조절, 그림자/Glow 조절 UI 컨트롤
+            const controlHtml = `
+                <div class="control-group" id="control-${id}">
+                    <h3>텍스트 ${id} <div><button class="btn-sm btn-duplicate" onclick="duplicateLayer(${id}, 'text')">복제</button><button class="btn-sm btn-remove" onclick="removeLayer(${id})">삭제</button></div></h3>
+                    <textarea id="text-input-${id}" oninput="updateStyle(${id}, 'innerText', this.value)">${text}</textarea>
+                    
+                    <label>폰트 & 색상</label>
+                    <div class="flex-row">
+                        <select id="font-${id}" style="flex:1" onchange="updateStyle(${id}, 'fontFamily', this.value)">
+                            ${fonts.map(f => `<option value="${f}" ${f===fontFamily?'selected':''} style="font-family:'${f}'">${f}</option>`).join('')}
+                        </select>
+                        <input type="color" id="color-${id}" value="${color}" style="width:40px;" oninput="updateStyle(${id}, 'color', this.value)">
+                    </div>
+
+                    <div class="flex-row style-btn-group" style="margin-top:8px;">
+                        <button onclick="updateAlign(${id}, 'left', this)" class="${align==='left'?'active':''}">좌</button>
+                        <button onclick="updateAlign(${id}, 'center', this)" class="${align==='center'?'active':''}">중앙</button>
+                        <button onclick="updateAlign(${id}, 'right', this)" class="${align==='right'?'active':''}">우</button>
+                        <button onclick="updateAlign(${id}, 'justify', this)" class="${align==='justify'?'active':''}">양쪽</button>
+                    </div>
+
+                    <label>폰트 크기 (<span id="fz-val-${id}">${fontSize}</span>px)</label>
+                    <input type="range" id="fz-${id}" min="10" max="300" value="${fontSize}" oninput="updateStyle(${id}, 'fontSize', this.value + 'px'); document.getElementById('fz-val-${id}').innerText=this.value;">
+
+                    <label>자간 / 행간</label>
+                    <div class="flex-row">
+                        <input type="range" id="ls-${id}" min="-10" max="20" value="${ls}" oninput="updateStyle(${id}, 'letterSpacing', this.value + 'px')">
+                        <input type="range" id="lh-${id}" min="0.8" max="3" step="0.1" value="${lh}" oninput="updateStyle(${id}, 'lineHeight', this.value)">
+                    </div>
+
+                    <label>Glow / 그림자 설정</label>
+                    <div class="flex-row">
+                        <input type="color" id="glow-${id}" value="${glow}" oninput="updateShadow(${id})">
+                        <input type="color" id="shadow-${id}" value="${shadow}" oninput="updateShadow(${id})">
+                    </div>
+                </div>`;
+            layersPanel.insertAdjacentHTML('afterbegin', controlHtml);
+        }
+
+        function addShapeLayer(type, presetData = null) {
+            const id = ++layerCount;
+            const el = document.createElement('div');
+            el.id = `layer-${id}`; el.className = 'layer shape-layer'; el.dataset.type = type;
+
+            const x = presetData?.x ?? 150; const y = presetData?.y ?? 150;
+            const color = presetData?.color ?? (type === 'rect' ? '#3b82f6' : '#10b981');
+            const w = presetData?.w ?? (type === 'rect' ? 150 : 200);
+            const h = presetData?.h ?? (type === 'rect' ? 150 : 4);
+
+            if(presetData?.groupId) el.dataset.groupId = presetData.groupId;
+
+            el.style.left = x + 'px'; el.style.top = y + 'px'; el.style.backgroundColor = color;
+            el.style.width = w + 'px'; el.style.height = h + 'px';
+            workspace.appendChild(el); dragElement(el); makeResizable(el, type);
+
+            const controlHtml = `
+                <div class="control-group" id="control-${id}">
+                    <h3>${type==='rect'?'사각형':'선'} ${id} <button class="btn-sm btn-remove" onclick="removeLayer(${id})">삭제</button></h3>
+                    <input type="color" id="shape-color-${id}" value="${color}" oninput="updateStyle(${id}, 'backgroundColor', this.value)">
+                </div>`;
+            layersPanel.insertAdjacentHTML('afterbegin', controlHtml);
+        }
+
+        function updateStyle(id, prop, value) {
+            const el = document.getElementById(`layer-${id}`);
+            if (prop === 'innerText') { const handle = el.querySelector('.resize-handle'); el.innerText = value; if (handle) el.appendChild(handle); } 
+            else { el.style[prop] = value; }
+        }
+
+        // 💡 복구됨: 텍스트 정렬 적용 함수
+        function updateAlign(id, align, btn) {
+            document.getElementById(`layer-${id}`).style.textAlign = align;
+            btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        // 💡 복구됨: 그림자/Glow 실시간 적용 함수
+        function updateShadow(id) {
+            const glow = document.getElementById(`glow-${id}`).value;
+            const shadow = document.getElementById(`shadow-${id}`).value;
+            document.getElementById(`layer-${id}`).style.textShadow = `0 0 10px ${glow}, 0 0 20px ${glow}, 3px 3px 5px ${shadow}`;
+        }
+
+        function removeLayer(id) { document.getElementById(`layer-${id}`)?.remove(); document.getElementById(`control-${id}`)?.remove(); }
+        
+        function duplicateLayer(originalId, type) {
+            const originalEl = document.getElementById(`layer-${originalId}`);
+            if (!originalEl) return;
+            const newId = ++layerCount;
+            const newEl = originalEl.cloneNode(true);
+            newEl.id = `layer-${newId}`; delete newEl.dataset.groupId;
+            const oldHandle = newEl.querySelector('.resize-handle'); if(oldHandle) oldHandle.remove();
+            newEl.style.left = (parseInt(originalEl.style.left) + 30) + 'px'; newEl.style.top = (parseInt(originalEl.style.top) + 30) + 'px';
+            workspace.appendChild(newEl); dragElement(newEl); makeResizable(newEl, type);
+            
+            if(type === 'text') {
+                // 💡 복구됨: 복제 시 자간, 행간, 정렬 상태 유지
+                addTextLayer({
+                    text: originalEl.innerText, x: parseInt(newEl.style.left), y: parseInt(newEl.style.top), 
+                    color: originalEl.style.color, fontFamily: originalEl.style.fontFamily.replace(/['"]/g, ''), fontSize: parseInt(originalEl.style.fontSize),
+                    ls: originalEl.style.letterSpacing.replace('px', '') || '0',
+                    lh: originalEl.style.lineHeight || '1.3',
+                    align: originalEl.style.textAlign || 'left'
+                });
+            }
+            else if(type === 'flag') addFlagLayer(originalEl.dataset.flagCode, {x: parseInt(newEl.style.left), y: parseInt(newEl.style.top), w: parseInt(originalEl.style.width)});
+            else addShapeLayer(type, {x: parseInt(newEl.style.left), y: parseInt(newEl.style.top), color: originalEl.style.backgroundColor, w: parseInt(originalEl.style.width), h: parseInt(originalEl.style.height)});
+            newEl.remove(); 
+        }
+
+        function exportPreset() {
+            const presetData = [];
+            presetData.push({
+                type: 'global',
+                ratio: currentRatio,
+                gradient: {
+                    on: document.getElementById('global-grad-on').checked,
+                    color: document.getElementById('global-grad-color').value,
+                    alpha: document.getElementById('global-grad-alpha').value,
+                    height: document.getElementById('global-grad-height').value
+                }
+            });
+
+            document.querySelectorAll('.layer').forEach(el => {
+                const id = el.id.split('-')[1]; const type = el.dataset.type;
+                const data = { type, x: parseInt(el.style.left) || 0, y: parseInt(el.style.top) || 0, groupId: el.dataset.groupId };
+
+                if (type === 'text') {
+                    data.text = document.getElementById(`text-input-${id}`).value;
+                    data.fontFamily = document.getElementById(`font-${id}`).value;
+                    data.fontSize = parseInt(el.style.fontSize) || 40;
+                    data.color = document.getElementById(`color-${id}`).value;
+                    
+                    // 💡 복구됨: 프리셋 저장 시 자간, 행간, 정렬, 그림자 값 추출 및 저장
+                    data.ls = document.getElementById(`ls-${id}`) ? document.getElementById(`ls-${id}`).value : '0';
+                    data.lh = document.getElementById(`lh-${id}`) ? document.getElementById(`lh-${id}`).value : '1.3';
+                    data.glow = document.getElementById(`glow-${id}`) ? document.getElementById(`glow-${id}`).value : '#000000';
+                    data.shadow = document.getElementById(`shadow-${id}`) ? document.getElementById(`shadow-${id}`).value : '#000000';
+                    data.align = el.style.textAlign || 'left';
+                    data.fontWeight = (el.style.fontWeight === '700' || el.style.fontWeight === 'bold') ? 'bold' : 'normal';
+
+                } else if (type === 'flag') {
+                    data.flagCode = el.dataset.flagCode;
+                    data.w = parseInt(el.style.width);
+                } else {
+                    data.color = document.getElementById(`shape-color-${id}`).value;
+                    data.w = parseInt(el.style.width); data.h = parseInt(el.style.height);
+                }
+                presetData.push(data);
+            });
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(presetData, null, 2));
+            const link = document.createElement('a'); link.href = dataStr; link.download = "editor_preset.json"; link.click();
+        }
+
+        function importPreset(event) {
+            const file = event.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const presetData = JSON.parse(e.target.result);
+                    document.querySelectorAll('.layer').forEach(el => removeLayer(el.id.split('-')[1]));
+                    
+                    const postRoom = document.getElementById('x-post-text');
+                    if(postRoom) postRoom.value = '';
+
+                    presetData.reverse().forEach(data => {
+                        if (data.type === 'global') {
+                            document.getElementById('global-grad-on').checked = data.gradient.on;
+                            document.getElementById('global-grad-color').value = data.gradient.color;
+                            document.getElementById('global-grad-alpha').value = data.gradient.alpha;
+                            document.getElementById('global-grad-height').value = data.gradient.height;
+                            updateGlobalGradient();
+                            
+                            const btnIdx = ['free', '16:9', '9:16', '1:1', 'twitter'].indexOf(data.ratio);
+                            if(btnIdx !== -1) document.querySelectorAll('#ratio-buttons button')[btnIdx].click();
+                        }
+                        else if (data.type === 'text') addTextLayer(data);
+                        else if (data.type === 'flag') addFlagLayer(data.flagCode, data);
+                        else if (data.type === 'post_link') {
+                            if(postRoom) postRoom.value = data.text;
+                        }
+                        else addShapeLayer(data.type, data);
+                    });
+                } catch (err) { alert("잘못된 프리셋 파일입니다."); }
+            };
+            reader.readAsText(file); event.target.value = ''; 
+        }
+
+        function dragElement(el) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            el.onmousedown = (e) => {
+                if (e.target.classList.contains('resize-handle')) return;
+                e.preventDefault(); 
+                
+                if (el.id !== 'bg-layer' && !el.classList.contains('selected')) {
+                    document.querySelectorAll('.layer.selected').forEach(l => l.classList.remove('selected'));
+                    el.classList.add('selected');
+                    if (el.dataset.groupId) {
+                        document.querySelectorAll(`.layer[data-group-id="${el.dataset.groupId}"]`).forEach(g => g.classList.add('selected'));
+                    }
+                }
+
+                pos3 = e.clientX; pos4 = e.clientY;
+                document.onmouseup = () => { document.onmouseup = null; document.onmousemove = null; };
+                document.onmousemove = (e) => {
+                    e.preventDefault();
+                    const scale = workspace.style.transform.includes('scale') ? parseFloat(workspace.style.transform.match(/scale\(([^)]+)\)/)[1]) : 1;
+                    pos1 = (pos3 - e.clientX) / scale; pos2 = (pos4 - e.clientY) / scale;
+                    pos3 = e.clientX; pos4 = e.clientY;
+                    
+                    if (el.id === 'bg-layer') {
+                        el.style.top = (el.offsetTop - pos2) + "px"; el.style.left = (el.offsetLeft - pos1) + "px";
+                    } else {
+                        document.querySelectorAll('.layer.selected').forEach(selEl => {
+                            selEl.style.top = (selEl.offsetTop - pos2) + "px";
+                            selEl.style.left = (selEl.offsetLeft - pos1) + "px";
+                        });
+                    }
+                };
+            };
+        }
+
+        function makeResizable(el, type) {
+            const handle = document.createElement('div'); handle.className = 'resize-handle'; el.appendChild(handle);
+            handle.addEventListener('mousedown', function(e) {
+                e.preventDefault(); e.stopPropagation();
+                const startX = e.clientX; const startY = e.clientY;
+                const startWidth = parseInt(el.style.width) || 0; const startHeight = parseInt(el.style.height) || 0;
+                const startFontSize = parseInt(el.style.fontSize) || 0;
+                const aspectRatio = startWidth / startHeight;
+                const scale = workspace.style.transform.includes('scale') ? parseFloat(workspace.style.transform.match(/scale\(([^)]+)\)/)[1]) : 1;
+
+                function doDrag(e) {
+                    const dx = (e.clientX - startX) / scale; const dy = (e.clientY - startY) / scale;
+                    if (type === 'text') {
+                        el.style.fontSize = Math.max(10, Math.round(startFontSize + (dx + dy) * 0.4)) + 'px';
+                        
+                        // 💡 복구됨: 드래그 시 폰트 크기 슬라이더 동기화
+                        const id = el.id.split('-')[1];
+                        const fzSlider = document.getElementById(`fz-${id}`);
+                        if(fzSlider) {
+                            fzSlider.value = parseInt(el.style.fontSize);
+                            document.getElementById(`fz-val-${id}`).innerText = parseInt(el.style.fontSize);
+                        }
+                    } else {
+                        let newWidth = Math.max(10, startWidth + dx); let newHeight = Math.max(1, startHeight + dy);
+                        if (e.shiftKey && startHeight > 0) newHeight = newWidth / aspectRatio;
+                        el.style.width = newWidth + 'px'; el.style.height = newHeight + 'px';
+                    }
+                }
+                function stopDrag() { document.removeEventListener('mousemove', doDrag); document.removeEventListener('mouseup', stopDrag); }
+                document.addEventListener('mousemove', doDrag); document.addEventListener('mouseup', stopDrag);
+            });
+        }
+
+        // ─────────────────────────────────────────────────
+        // X축 중앙 정렬: 워크스페이스 너비 기준으로 배경 이미지를
+        // 가로 중앙에 위치시킴. left = -(bgWidth - wsWidth) / 2
+        // ─────────────────────────────────────────────────
+        function centerBgX() {
+            const wsWidth = parseInt(workspace.style.width);
+            const bgWidth = parseInt(bgLayer.style.width);
+            if (!wsWidth || !bgWidth) {
+                alert('배경 이미지를 먼저 불러와주세요.');
+                return;
+            }
+            // 배경이 캔버스보다 크면 음수 left가 되어 넘친 부분이 잘림 (정상 동작)
+            const newLeft = -((bgWidth - wsWidth) / 2);
+            bgLayer.style.left = newLeft + 'px';
+        }
+
+        // ─────────────────────────────────────────────────
+        // Y축 중앙 정렬: 워크스페이스 높이 기준으로 배경 이미지를
+        // 세로 중앙에 위치시킴. top = -(bgHeight - wsHeight) / 2
+        // ─────────────────────────────────────────────────
+        function centerBgY() {
+            const wsHeight = parseInt(workspace.style.height);
+            const bgHeight = parseInt(bgLayer.style.height);
+            if (!wsHeight || !bgHeight) {
+                alert('배경 이미지를 먼저 불러와주세요.');
+                return;
+            }
+            const newTop = -((bgHeight - wsHeight) / 2);
+            bgLayer.style.top = newTop + 'px';
+        }
+
+        // ── X.com 에디터 이벤트 연결 ──────────────────────────
+        (function initXEditor() {
+            const editor = document.getElementById('x-post-editor');
+
+            // 입력 시 실시간 미리보기 업데이트
+            editor.addEventListener('input', _xUpdateLivePreview);
+
+            // 포커스를 잃기 직전에 커서 위치 저장 (이모지/불릿 클릭 후 복원용)
+            editor.addEventListener('blur', () => {
+                const sel = window.getSelection();
+                if (sel && sel.rangeCount > 0 && editor.contains(sel.getRangeAt(0).startContainer)) {
+                    _xSavedRange = sel.getRangeAt(0).cloneRange();
+                }
+            });
+
+            // Ctrl+B → 볼드체
+            editor.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.key.toLowerCase() === 'b') {
+                    e.preventDefault();
+                    applyXBold();
+                }
+            });
+
+            // Enter 키 → <br> 삽입 (div 계층 방지)
+            editor.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    document.execCommand('insertLineBreak');
+                    _xUpdateLivePreview();
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

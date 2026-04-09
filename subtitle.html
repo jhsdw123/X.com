@@ -1,0 +1,2447 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>동영상 스크립트 추출 및 마케팅 에디터 (고화질 렌더링)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Pretendard', sans-serif; max-width: 1400px; margin: 40px auto; padding: 20px; background-color: #15202b; color: #e7e9ea; }
+        .header-section { margin-bottom: 20px; background: #1e2732; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); border: 1px solid #38444d; }
+
+        .main-layout { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+        .editor-section { flex: 1; min-width: 600px; background: #1e2732; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); border: 1px solid #38444d; }
+
+        .side-panels { flex: 0 0 450px; display: flex; flex-direction: column; gap: 20px; }
+        .panel { background: #1e2732; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); border: 1px solid #38444d; }
+        .panel-title { font-size: 16px; font-weight: bold; margin-bottom: 15px; color: #e7e9ea; border-bottom: 2px solid #4CAF50; padding-bottom: 5px; }
+
+        .suggestion-box { background-color: #253341; border: 1px solid #38444d; border-radius: 6px; padding: 12px; margin-bottom: 10px; cursor: pointer; transition: 0.2s; font-size: 14px; line-height: 1.4; color: #e7e9ea; }
+        .suggestion-box:hover { background-color: #2c3e50; border-color: #1d9bf0; transform: translateY(-2px); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+
+        .script-row { display: flex; gap: 15px; margin-bottom: 20px; align-items: flex-start; border-bottom: 1px solid #38444d; padding-bottom: 15px; }
+        .time-box { flex: 0 0 90px; display: flex; flex-direction: column; gap: 4px; }
+        .time-input { width: 100%; padding: 6px; text-align: center; font-size: 13px; font-weight: bold; border: 1px solid #38444d; border-radius: 4px; box-sizing: border-box; background: #253341; color: #e7e9ea; }
+
+        .text-container { flex-grow: 1; display: flex; flex-direction: column; gap: 8px; }
+        .text-input { width: 100%; padding: 10px; min-height: 50px; resize: vertical; border: 1px solid #38444d; border-radius: 4px; font-size: 14px; line-height: 1.5; background: #253341; color: #e7e9ea; }
+        .original-text { background-color: #253341; color: #8899a6; }
+        .translated-text { background-color: #1e2732; color: #e7e9ea; font-weight: 500; border-color: #1d9bf0; }
+        .translated-text::selection { background-color: rgba(29,155,240,0.3); }
+        .japanese-text { background-color: #1e2732; color: #f0e6d3; font-weight: 500; border-color: #ef4444; }
+        .japanese-text::selection { background-color: rgba(239,68,68,0.3); }
+
+        #loading, #renderLoading, #xLoading { display: none; color: #1d9bf0; font-weight: bold; padding: 10px; background-color: #253341; border-radius: 4px; margin-top: 10px; text-align: center; border: 1px solid #38444d; }
+        #statusMessage, #renderStatus { color: #8899a6; font-size: 0.9em; margin-top: 5px; }
+        .notice { font-size: 12px; color: #f59e0b; margin-top: 5px; text-align: center; }
+
+        /* 프로그레스 바 */
+        .progress-bar-track { background: #253341; border-radius: 8px; overflow: hidden; height: 6px; margin: 10px 0 8px; }
+        .progress-bar-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #1d9bf0, #4CAF50); transition: width 0.5s ease; border-radius: 8px; }
+
+        button { padding: 12px 20px; cursor: pointer; background-color: #4CAF50; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; transition: 0.2s; }
+        button:hover { background-color: #45a049; }
+        .action-btn { background-color: #2563eb; margin-top: 15px; width: 100%; font-size: 18px; padding: 15px; }
+        .action-btn:hover { background-color: #1d4ed8; }
+        .action-btn:disabled { background-color: #38444d; color: #71767b; cursor: not-allowed; }
+        .render-options { margin-top: 30px; padding: 15px; background-color: #253341; border: 1px solid #38444d; border-radius: 8px; text-align: center; display: none; }
+        .render-options label { cursor: pointer; font-size: 16px; font-weight: bold; color: #e7e9ea; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .render-options input[type="checkbox"] { transform: scale(1.3); cursor: pointer; accent-color: #1d9bf0; }
+        .render-options select { padding: 8px; border-radius: 4px; border: 1px solid #38444d; font-size: 14px; font-weight: bold; background: #1e2732; color: #e7e9ea; }
+
+        #videoPlayer, #renderCanvas { display: none; max-width: 100%; border-radius: 8px; margin-top: 20px; background-color: black; }
+
+        /* --- X.com 스튜디오 스타일 --- */
+        .x-btn { background-color: #38444d; color: white; width: 100%; margin-top: 10px; }
+        .x-btn:hover { background-color: #4a5568; }
+        .x-post-btn { background-color: #1d9bf0; color: white; width: 100%; margin-top: 10px; font-size: 16px; }
+        .x-post-btn:hover { background-color: #1a8cd8; }
+
+        .emoji-row { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
+        .emoji-btn { font-size: 15px; padding: 6px 12px; border: 1px solid #38444d; background: #253341; color: #e7e9ea; border-radius: 20px; cursor: pointer; transition: 0.2s; }
+        .emoji-btn:hover { background: #2c3e50; }
+        .emoji-btn.selected { background: rgba(29,155,240,0.2); border-color: #1d9bf0; box-shadow: 0 0 0 1px #1d9bf0; }
+
+        .title-list { display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; margin-bottom: 15px; border: 1px solid #38444d; padding: 10px; border-radius: 4px; background: #253341; }
+        .title-item { padding: 8px 12px; background: #1e2732; border: 1px solid #38444d; border-radius: 4px; cursor: pointer; font-size: 13px; transition: 0.2s; color: #e7e9ea; }
+        .title-item:hover { background: #2c3e50; }
+        .title-item.selected { background: #1d9bf0; color: white; border-color: #1d9bf0; font-weight: bold; }
+
+        .hashtag-cloud { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 15px; max-height: 150px; overflow-y: auto; padding: 10px; border: 1px solid #38444d; border-radius: 4px; background: #253341; }
+        .hashtag-item { padding: 4px 10px; background: #1e2732; border: 1px solid #38444d; border-radius: 20px; cursor: pointer; font-size: 12px; color: #1d9bf0; transition: 0.2s; }
+        .hashtag-item:hover { background: #2c3e50; }
+        .hashtag-item.selected { background: #1d9bf0; color: white; border-color: #1d9bf0; }
+
+        .x-preview-area { background: #253341; border: 1px solid #38444d; border-radius: 12px; padding: 15px; margin-top: 15px; }
+        .x-preview-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .x-avatar { width: 40px; height: 40px; background: #38444d; border-radius: 50%; }
+        .x-name { font-weight: bold; font-size: 14px; color: #e7e9ea; }
+        .x-handle { color: #71767b; font-size: 14px; }
+        .x-textarea { width: 100%; border: none; resize: none; font-size: 15px; min-height: 120px; outline: none; font-family: inherit; line-height: 1.5; background: #253341; color: #e7e9ea; }
+        .selection-count { font-size: 11px; color: #ef4444; font-weight: bold; margin-bottom: 5px; display: block; }
+
+        /* 자막 행 액션 버튼 */
+        .row-actions { display: flex; flex-direction: column; gap: 4px; flex: 0 0 30px; }
+        .row-action-btn { padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; transition: 0.2s; }
+        .row-action-btn.delete { background: #ef4444; color: white; }
+        .row-action-btn.delete:hover { background: #dc2626; }
+        .row-action-btn.add { background: #1d9bf0; color: white; }
+        .row-action-btn.add:hover { background: #1a8cd8; }
+
+        /* 에러 복구 영역 */
+        .error-recovery { text-align: center; padding: 40px; color: #ef4444; }
+        .error-recovery p.error-title { font-size: 18px; font-weight: bold; margin-bottom: 8px; }
+        .error-recovery p.error-detail { color: #8899a6; margin-bottom: 16px; }
+        .retry-btn { padding: 12px 24px; background: #1d9bf0; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        .retry-btn:hover { background: #1a8cd8; }
+
+        /* 스크롤바 다크 테마 */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #253341; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #38444d; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4a5568; }
+
+        /* input/select 다크 테마 */
+        input[type="file"] { color: #8899a6; }
+        select { background: #1e2732; color: #e7e9ea; border: 1px solid #38444d; }
+
+        /* 화자 라벨 */
+        .speaker-label-section { margin-top: 20px; padding: 15px; background: #253341; border: 1px solid #38444d; border-radius: 8px; }
+        .speaker-label-section .section-title { font-size: 14px; font-weight: bold; color: #1d9bf0; margin-bottom: 10px; }
+        .speaker-label-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+        .speaker-label-row input { padding: 6px 8px; border: 1px solid #38444d; border-radius: 4px; background: #1e2732; color: #e7e9ea; font-size: 13px; }
+        .speaker-label-row input.label-text, .speaker-label-row textarea.label-text { flex: 1; min-width: 150px; }
+        .speaker-label-row textarea.label-text { resize: vertical; min-height: 30px; height: 30px; font-family: inherit; line-height: 1.4; }
+        .speaker-label-row input.label-range { width: 55px; text-align: center; }
+        .speaker-label-row button { padding: 4px 10px; font-size: 12px; }
+
+        /* 반응형 사이드 패널 */
+        @media (max-width: 1200px) {
+            .side-panels { flex: 1 1 100%; min-width: 0; }
+            .editor-section { min-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-section" id="dropZone">
+        <h2>🎥 비디오 스크립트 칼싱크 추출 & X.com 스튜디오</h2>
+        <div id="dragOverlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(37,99,235,0.15); border:3px dashed #2563eb; border-radius:8px; z-index:99; pointer-events:none;">
+            <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:20px; font-weight:bold; color:#2563eb;">🎬 여기에 영상을 놓으세요!</div>
+        </div>
+        <input type="file" id="videoFile" accept="video/mp4, video/webm, video/quicktime">
+        <span style="font-size:12px; color:#71767b; margin-left:8px;">또는 이 영역에 영상 파일을 드래그하세요</span>
+
+        <div style="margin: 12px 0; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <label style="font-size: 14px; font-weight: bold; color: #8899a6;">🗣️ 한국어 말투:</label>
+            <select id="toneSelect" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #38444d; font-size: 14px; font-weight: 600; background: #253341; color: #e7e9ea; cursor: pointer;">
+                <option value="anchor">📺 뉴스 앵커 (~습니다)</option>
+                <option value="slang">🤬 비속어/은어 반말 (존나, ㅆㅂ 등)</option>
+                <option value="polite">😊 부드러운 존댓말 (~했어요, ~할게요)</option>
+                <option value="stern">⚖️ 강경 공표체 (~했다, ~이다)</option>
+            </select>
+        </div>
+        <div style="margin: 12px 0; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <label style="font-size: 14px; font-weight: bold; color: #8899a6;">🇯🇵 일본어 말투:</label>
+            <select id="jpToneSelect" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #38444d; font-size: 14px; font-weight: 600; background: #253341; color: #e7e9ea; cursor: pointer;">
+                <option value="yakuza">🤬 야쿠자 비속어 (てめぇ, クソ 등)</option>
+                <option value="casual">😄 캐주얼 반말 (~だよね, ~じゃん)</option>
+                <option value="keigo">😊 격식체 존경어 (~でございます)</option>
+                <option value="news">📺 뉴스 아나운서 (~です・~ました)</option>
+            </select>
+        </div>
+
+        <button id="extractBtn">1. 원문 및 한국어 번역 추출하기</button>
+        <button id="extractJpBtn" style="padding: 12px 20px; background-color: #ef4444; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; margin-left: 8px; transition: 0.2s;">🇯🇵 2. 일본어 자막 추출하기</button>
+        <button id="extractOriginalSrtBtn" style="padding: 12px 20px; background-color: #8b5cf6; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; margin-left: 8px; transition: 0.2s;">🎧 원문 자막만 SRT 추출 (번역 없음)</button>
+        <div id="jpLoading" style="display: none; color: #ef4444; font-weight: bold; padding: 10px; background-color: #253341; border-radius: 4px; margin-top: 10px; text-align: center; border: 1px solid #38444d;">
+            <div class="progress-bar-track"><div class="progress-bar-fill" id="jpProgressBar"></div></div>
+            <div id="jpStatusMessage">일본어 번역 준비 중...</div>
+        </div>
+        <div id="srtLoading" style="display: none; color: #8b5cf6; font-weight: bold; padding: 10px; background-color: #253341; border-radius: 4px; margin-top: 10px; text-align: center; border: 1px solid #38444d;">
+            <div class="progress-bar-track"><div class="progress-bar-fill" id="srtProgressBar"></div></div>
+            <div id="srtStatusMessage">파일 업로드 중...</div>
+        </div>
+        <div id="loading">
+            <div class="progress-bar-track"><div class="progress-bar-fill" id="progressBar"></div></div>
+            <div id="statusMessage">파일 업로드 중...</div>
+        </div>
+    </div>
+
+    <div class="main-layout">
+        <div class="editor-section" id="editorWrapper">
+            <div id="editorArea">
+                <p style="color: #71767b; text-align: center;">영상을 업로드하면 여기에 스크립트가 표시됩니다.</p>
+            </div>
+            
+            <div class="render-options" id="renderOptions">
+                <label>
+                    <input type="checkbox" id="useTtsCheckbox" checked>
+                    🎙️ AI 더빙(음성) 포함해서 렌더링하기
+                </label>
+                
+                <div style="margin: 15px 0; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                    <label style="font-size: 14px; font-weight: bold; color: #8899a6;">해상도 선택: </label>
+                    <select id="resolutionSelect" style="padding: 8px; border-radius: 4px; border: 1px solid #38444d; font-size: 14px; font-weight: bold; background: #1e2732; color: #e7e9ea;">
+                        <option value="720">HD (720p) - 빠름</option>
+                        <option value="1080" selected>FHD (1080p) - 권장</option>
+                        <option value="original">원본 화질 유지</option>
+                    </select>
+                </div>
+                
+                <!-- 워터마크 이미지 업로드 (선택 사항) -->
+                <div style="margin: 12px 0; padding: 12px 14px; background: #253341; border: 1px dashed #38444d; border-radius: 6px; text-align: left;">
+                    <div style="font-size: 14px; font-weight: bold; color: #8899a6; margin-bottom: 8px; text-align: center;">🖼️ 워터마크 이미지 삽입 <span style="font-weight:normal; font-size:12px; color:#71767b;">(선택 — 업로드 안 하면 워터마크 없음)</span></div>
+                    <div style="display: flex; align-items: center; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                        <input type="file" id="wmImageInput" accept="image/*" style="font-size: 13px; cursor: pointer;">
+                        <button type="button" id="wmClearBtn" style="padding: 5px 12px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold; display: none;" onclick="_wmClear()">✕ 제거</button>
+                    </div>
+                    <div id="wmPreview" style="margin-top: 8px; display: none; align-items: center; gap: 8px; justify-content: center;">
+                        <img id="wmThumb" style="height: 40px; border-radius: 4px; border: 1px solid #cbd5e1; object-fit: contain;" src="" alt="">
+                        <span style="font-size: 12px; color: #71767b;">영상 곳곳에 랜덤 위치로 잠깐씩 등장</span>
+                    </div>
+                    <div id="wmControls" style="margin-top: 10px; display: none; padding: 10px; background: #1e2732; border: 1px solid #38444d; border-radius: 6px;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                            <label style="font-size: 13px; font-weight: bold; color: #8899a6; min-width: 70px;">크기 배율:</label>
+                            <input type="range" id="wmScaleRange" min="1" max="10" step="0.5" value="1" style="flex: 1; accent-color: #1d9bf0; cursor: pointer;">
+                            <span id="wmScaleValue" style="font-size: 13px; font-weight: bold; color: #1d9bf0; min-width: 40px; text-align: right;">x1</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <label style="font-size: 13px; font-weight: bold; color: #8899a6; min-width: 70px;">불투명도:</label>
+                            <input type="range" id="wmAlphaRange" min="0" max="100" step="5" value="40" style="flex: 1; accent-color: #1d9bf0; cursor: pointer;">
+                            <span id="wmAlphaValue" style="font-size: 13px; font-weight: bold; color: #1d9bf0; min-width: 40px; text-align: right;">40%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 화자 라벨 섹션 -->
+                <div class="speaker-label-section" id="speakerLabelSection">
+                    <div class="section-title">🏷️ 화자 라벨 (좌측 상단에 표시 — 선택 사항)</div>
+                    <div id="speakerLabels"></div>
+                    <button type="button" onclick="addSpeakerLabel()" style="padding: 6px 14px; font-size: 13px; background: #1d9bf0; margin-top: 6px;">+ 라벨 추가</button>
+                </div>
+
+                <!-- 엔드스크린 설정 -->
+                <div style="margin: 15px 0; padding: 15px; background: #253341; border: 1px solid #38444d; border-radius: 8px;">
+                    <label style="cursor: pointer; font-size: 15px; font-weight: bold; color: #e7e9ea; display: flex; align-items: center; gap: 10px;">
+                        <input type="checkbox" id="useEndScreen" style="transform: scale(1.3); accent-color: #1d9bf0; cursor: pointer;">
+                        🎬 엔드스크린 삽입 (영상 끝에 아웃트로 추가)
+                    </label>
+                    <div id="endScreenOptions" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #38444d;">
+                        <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px;">
+                            <div style="flex: 1; min-width: 200px;">
+                                <label style="font-size: 12px; font-weight: bold; color: #8899a6; display: block; margin-bottom: 4px;">채널명 / 제목</label>
+                                <input type="text" id="endScreenTitle" value="@YoonagainKR" style="width: 100%; padding: 8px; border: 1px solid #38444d; border-radius: 4px; background: #1e2732; color: #e7e9ea; font-size: 14px; box-sizing: border-box;">
+                            </div>
+                            <div style="flex: 1; min-width: 200px;">
+                                <label style="font-size: 12px; font-weight: bold; color: #8899a6; display: block; margin-bottom: 4px;">부제 / CTA 문구</label>
+                                <input type="text" id="endScreenSubtitle" value="멸공죽창" style="width: 100%; padding: 8px; border: 1px solid #38444d; border-radius: 4px; background: #1e2732; color: #e7e9ea; font-size: 14px; box-sizing: border-box;">
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+                            <div>
+                                <label style="font-size: 12px; font-weight: bold; color: #8899a6; display: block; margin-bottom: 4px;">지속 시간</label>
+                                <select id="endScreenDuration" style="padding: 8px; border-radius: 4px; border: 1px solid #38444d; font-size: 14px; background: #1e2732; color: #e7e9ea;">
+                                    <option value="3">3초</option>
+                                    <option value="5" selected>5초</option>
+                                    <option value="7">7초</option>
+                                    <option value="10">10초</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-size: 12px; font-weight: bold; color: #8899a6; display: block; margin-bottom: 4px;">스타일</label>
+                                <select id="endScreenStyle" style="padding: 8px; border-radius: 4px; border: 1px solid #38444d; font-size: 14px; background: #1e2732; color: #e7e9ea;">
+                                    <option value="cinematic">🎬 시네마틱 (어둡고 고급스러운)</option>
+                                    <option value="neon">💜 네온 글로우</option>
+                                    <option value="golden">✨ 골든 럭셔리</option>
+                                    <option value="minimal">⬜ 미니멀 화이트</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-size: 12px; font-weight: bold; color: #8899a6; display: block; margin-bottom: 4px;">로고 이미지 (선택)</label>
+                                <input type="file" id="endScreenLogo" accept="image/*" style="font-size: 12px; cursor: pointer;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="renderBtn" class="action-btn">2. 🎬 설정된 화질로 렌더링 및 다운로드 시작</button>
+                
+                <button id="exportSrtBtn" class="action-btn" style="background-color: #f59e0b; margin-top: 10px;">
+                    📝 X.com용 한국어 번역 자막(.srt)만 따로 다운로드
+                </button>
+                <button id="exportJpSrtBtn" class="action-btn" style="background-color: #ef4444; margin-top: 10px; display: none;">
+                    🇯🇵 일본어 번역 자막(.srt)만 따로 다운로드
+                </button>
+            </div>
+
+            <div id="renderLoading">
+                <div id="renderStatus" style="font-weight:bold; color:#2563eb;">영상 렌더링 준비 중...</div>
+                <div id="renderProgress" style="font-size: 24px; font-weight: 900; color: #ef4444; margin: 15px 0;">0% 완료</div>
+                <div class="notice">💡 안내: 다운로드된 영상에서 소리가 안 난다면 편집기나 컨버터를 통해 MP4(AAC)로 다시 내보내기 해주세요.</div>
+            </div>
+            
+            <video id="videoPlayer" controls></video>
+            <canvas id="renderCanvas"></canvas>
+        </div>
+
+        <div class="side-panels">
+            
+            <div class="panel" id="xPanel" style="border: 2px solid #1d9bf0;">
+                <div class="panel-title" style="border-color: #1d9bf0; color: #1d9bf0;">🐦 X.com 업로드 스튜디오</div>
+                <div id="xPanelPlaceholder" style="text-align:center; padding:20px; color:#71767b;">
+                    <p style="margin:0;">영상을 먼저 추출하면 자동으로 활성화됩니다</p>
+                </div>
+                <button id="generateXBtn" class="x-btn" disabled style="display:none;">3. ⚡ 제목 및 해시태그 AI 생성</button>
+                <div id="xLoading">데이터를 분석하고 카피를 작성 중입니다...</div>
+
+                <div id="xContentArea" style="display:none; margin-top:15px;">
+                    
+                    <span style="font-size: 12px; font-weight: bold; color: #8899a6;">🎯 오프닝 이모지 (선택)</span>
+                    <div class="emoji-row" id="emojiContainer">
+                        <button class="emoji-btn">🚨속보🚨</button>
+                        <button class="emoji-btn">😱충격🤯</button>
+                        <button class="emoji-btn">🇰🇷</button>
+                        <button class="emoji-btn">🇺🇸</button>
+                        <button class="emoji-btn">🇨🇳</button>
+                        <button class="emoji-btn">🇰🇵</button>
+                    </div>
+
+                    <span style="font-size: 12px; font-weight: bold; color: #8899a6;">📝 추천 제목 (클릭하여 1개 선택)</span>
+                    <div class="title-list" id="titleList"></div>
+
+                    <span style="font-size: 12px; font-weight: bold; color: #8899a6;">🏷️ 추천 해시태그 (클릭하여 최대 5개 선택)</span>
+                    <span class="selection-count" id="tagCount">0 / 5 선택됨</span>
+                    <div class="hashtag-cloud" id="tagList"></div>
+
+                    <div class="x-preview-area">
+                        <div class="x-preview-header">
+                            <div class="x-avatar"></div>
+                            <div>
+                                <span class="x-name">My Channel</span>
+                                <span class="x-handle">@ChannelHandle</span>
+                            </div>
+                        </div>
+                        <textarea class="x-textarea" id="xPreviewText" readonly placeholder="요소를 선택하면 미리보기가 자동 완성됩니다."></textarea>
+                    </div>
+                    
+                    <button id="postToXBtn" class="x-post-btn">🐦 X.com에 바로 게시하기</button>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">✨ AI 번역 대안 제안</div>
+                <div id="panelLoading">더 자연스러운 표현을 찾는 중... ⏳</div>
+                <div id="suggestionResults"><p style="font-size: 12px; color: #71767b; margin-bottom: 10px;">좌측 번역본에서 마음에 안 드는 부분을 마우스로 드래그(블록 지정) 하세요.</p></div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const API_KEY = 'AIzaSyDZpXmUjOSC78hh27nvH2IVp8fK4hO7Kyo'; 
+        const TTS_API_KEY = 'AIzaSyBrblN5JgbtMrys4x6wAEuF3ih0JuyAg2M';
+        const MODEL_NAME = 'gemini-flash-latest';
+
+        let originalVideoFile = null;
+
+        // ─────────────────────────────────────────────────
+        // 자막 시간 처리 헬퍼 함수
+        // ─────────────────────────────────────────────────
+
+        // "MM:SS" 또는 "HH:MM:SS" 형식을 초(숫자)로 변환
+        function parseTimeStr(t) {
+            const p = (t || '0:0').trim().split(':');
+            if (p.length === 3) return parseInt(p[0]) * 3600 + parseInt(p[1]) * 60 + parseFloat(p[2]);
+            if (p.length === 2) return parseInt(p[0]) * 60 + parseFloat(p[1]);
+            return 0;
+        }
+
+        // 초(숫자)를 "MM:SS" 형식으로 변환
+        function formatTimeStr(sec) {
+            const m = Math.floor(sec / 60);
+            const s = Math.floor(sec % 60);
+            return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+
+        // ─────────────────────────────────────────────────
+        // AI가 maxSec(기본 7초)을 초과하는 자막을 반환했을 때
+        // 클라이언트 레벨에서 자동으로 분할하는 후처리 함수.
+        // 한국어 문장 경계(다. 습니다. 합니다. 등)를 먼저 찾고,
+        // 없으면 단어 수 기준으로 균등 분할함.
+        // ─────────────────────────────────────────────────
+        function splitLongSubtitles(scripts, maxSec = 7) {
+            const result = [];
+
+            for (const item of scripts) {
+                const startSec = parseTimeStr(item.start);
+                const endSec   = parseTimeStr(item.end);
+                const duration = endSec - startSec;
+
+                // 정상 길이거나 시간 정보가 없으면 그대로
+                if (duration <= maxSec || duration <= 0) {
+                    result.push(item);
+                    continue;
+                }
+
+                // 한국어/영어 문장 경계로 번역 텍스트 분할 시도
+                // (~습니다. ~합니다. ~겠습니다. + . ! ?)
+                const sentences = item.translation
+                    .split(/(?<=[.!?])\s+|(?<=습니다\.)\s*|(?<=합니다\.)\s*|(?<=겠습니다\.)\s*/)
+                    .map(s => s.trim())
+                    .filter(s => s.length > 0);
+
+                const origSentences = item.original
+                    .split(/(?<=[.!?])\s+/)
+                    .map(s => s.trim())
+                    .filter(s => s.length > 0);
+
+                if (sentences.length > 1) {
+                    // 문장 경계 기준: 글자 수 비율로 시간 배분
+                    const totalChars = sentences.reduce((sum, s) => sum + s.length, 0);
+                    let curSec = startSec;
+
+                    sentences.forEach((sentence, i) => {
+                        const ratio = sentence.length / totalChars;
+                        const segEnd = (i === sentences.length - 1)
+                            ? endSec
+                            : Math.min(curSec + duration * ratio, endSec - 0.5);
+
+                        result.push({
+                            start: formatTimeStr(curSec),
+                            end:   formatTimeStr(segEnd),
+                            original:    (origSentences[i] || item.original).trim(),
+                            translation: sentence
+                        });
+                        curSec = segEnd;
+                    });
+                } else {
+                    // 문장 경계가 없으면 단어 수 기준으로 균등 분할
+                    const chunks   = Math.ceil(duration / maxSec);
+                    const words    = item.translation.split(' ');
+                    const origWords = item.original.split(' ');
+                    const wpChunk  = Math.ceil(words.length / chunks);
+                    const owpChunk = Math.ceil(origWords.length / chunks);
+                    const secPerChunk = duration / chunks;
+
+                    for (let i = 0; i < chunks; i++) {
+                        const transPart = words.slice(i * wpChunk, (i + 1) * wpChunk).join(' ').trim();
+                        const origPart  = origWords.slice(i * owpChunk, (i + 1) * owpChunk).join(' ').trim();
+                        if (!transPart) continue;
+
+                        result.push({
+                            start: formatTimeStr(startSec + i * secPerChunk),
+                            end:   formatTimeStr(Math.min(startSec + (i + 1) * secPerChunk, endSec)),
+                            original:    origPart,
+                            translation: transPart
+                        });
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        // ─────────────────────────────────────────────────
+        // 자막 싱크 보정 후처리
+        // 1) 불필요한 자막 간 공백 제거 (연속 대사면 이어 붙임)
+        // 2) 최소 표시 시간 보장 (짧은 자막 → end를 늘림)
+        // ─────────────────────────────────────────────────
+        function fixSubtitleSync(scripts) {
+            if (!scripts || scripts.length === 0) return scripts;
+
+            for (let i = 0; i < scripts.length; i++) {
+                let startSec = parseTimeStr(scripts[i].start);
+                let endSec = parseTimeStr(scripts[i].end);
+                const textLen = (scripts[i].translation || '').length;
+
+                // 최소 표시 시간: 글자 20자 이상이면 3초, 아니면 2초
+                const minDuration = textLen >= 20 ? 3 : 2;
+                let duration = endSec - startSec;
+
+                // 표시 시간이 최소보다 짧으면 end를 늘림
+                if (duration > 0 && duration < minDuration) {
+                    endSec = startSec + minDuration;
+
+                    // 다음 자막의 start를 침범하지 않도록 제한
+                    if (i < scripts.length - 1) {
+                        const nextStart = parseTimeStr(scripts[i + 1].start);
+                        if (endSec > nextStart) endSec = nextStart;
+                    }
+
+                    scripts[i].end = formatTimeStr(endSec);
+                }
+
+                // 다음 자막과의 불필요한 공백 제거
+                // 자막 간 간격이 1.5초 이하이면 공백 없이 이어 붙임
+                if (i < scripts.length - 1) {
+                    const nextStartSec = parseTimeStr(scripts[i + 1].start);
+                    const gap = nextStartSec - endSec;
+
+                    if (gap > 0 && gap <= 1.5) {
+                        // 현재 자막의 end를 다음 자막의 start까지 확장
+                        scripts[i].end = scripts[i + 1].start;
+                    }
+                }
+            }
+
+            return scripts;
+        }
+
+        // --- 자막 행 생성 함수 (재사용) ---
+        function createSubtitleRow(item) {
+            const row = document.createElement('div');
+            row.className = 'script-row';
+
+            const timeBox = document.createElement('div');
+            timeBox.className = 'time-box';
+
+            const startTimeInput = document.createElement('input');
+            startTimeInput.type = 'text';
+            startTimeInput.className = 'time-input start-time';
+            startTimeInput.value = item.start || "";
+
+            const timeDivider = document.createElement('div');
+            timeDivider.innerText = '~';
+            timeDivider.style.textAlign = 'center';
+            timeDivider.style.fontSize = '12px';
+            timeDivider.style.color = '#71767b';
+
+            const endTimeInput = document.createElement('input');
+            endTimeInput.type = 'text';
+            endTimeInput.className = 'time-input end-time';
+            endTimeInput.value = item.end || "";
+
+            timeBox.appendChild(startTimeInput);
+            timeBox.appendChild(timeDivider);
+            timeBox.appendChild(endTimeInput);
+
+            const textContainer = document.createElement('div');
+            textContainer.className = 'text-container';
+
+            const originalInput = document.createElement('textarea');
+            originalInput.className = 'text-input original-text';
+            originalInput.value = item.original || "";
+
+            const translatedInput = document.createElement('textarea');
+            translatedInput.className = 'text-input translated-text';
+            translatedInput.value = item.translation || "";
+
+            textContainer.appendChild(originalInput);
+            textContainer.appendChild(translatedInput);
+
+            // 행 액션 버튼 (삭제/추가)
+            const actionBox = document.createElement('div');
+            actionBox.className = 'row-actions';
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.innerText = '✕';
+            deleteBtn.className = 'row-action-btn delete';
+            deleteBtn.title = '이 자막 삭제';
+            deleteBtn.addEventListener('click', () => row.remove());
+
+            const addBtn = document.createElement('button');
+            addBtn.innerText = '+';
+            addBtn.className = 'row-action-btn add';
+            addBtn.title = '아래에 새 자막 추가';
+            addBtn.addEventListener('click', () => {
+                const newRow = createSubtitleRow({start:'', end:'', original:'', translation:''});
+                row.after(newRow);
+            });
+
+            actionBox.appendChild(deleteBtn);
+            actionBox.appendChild(addBtn);
+
+            row.appendChild(timeBox);
+            row.appendChild(textContainer);
+            row.appendChild(actionBox);
+            return row;
+        }
+
+        // --- 1. 스크립트 추출 및 번역 ---
+        document.getElementById('extractBtn').addEventListener('click', async () => {
+            const fileInput = document.getElementById('videoFile');
+            const file = fileInput.files[0];
+            const loading = document.getElementById('loading');
+            const statusMessage = document.getElementById('statusMessage');
+            const progressBar = document.getElementById('progressBar');
+            const editorArea = document.getElementById('editorArea');
+            const renderOptions = document.getElementById('renderOptions');
+
+            if (!file) { alert('동영상 파일을 선택해 주세요!'); return; }
+            originalVideoFile = file;
+
+            loading.style.display = 'block';
+            progressBar.style.width = '0%';
+            editorArea.innerHTML = '';
+            renderOptions.style.display = 'none';
+
+            try {
+                statusMessage.innerText = '1/3: 영상을 서버에 업로드하는 중...';
+                progressBar.style.width = '15%';
+                const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${API_KEY}`;
+                const uploadResponse = await fetch(uploadUrl, {
+                    method: 'POST',
+                    headers: { 'X-Goog-Upload-Protocol': 'raw', 'X-Goog-Upload-Command': 'start, upload, finalize', 'X-Goog-Upload-Header-Content-Length': file.size, 'X-Goog-Upload-Header-Content-Type': file.type, 'Content-Type': file.type },
+                    body: file
+                });
+                const uploadData = await uploadResponse.json();
+                if (!uploadData.file || !uploadData.file.name) throw new Error('파일 업로드에 실패했습니다.');
+                
+                const fileName = uploadData.file.name;
+                const fileUri = uploadData.file.uri;
+
+                statusMessage.innerText = '2/3: 서버에서 영상을 처리 중입니다...';
+                progressBar.style.width = '40%';
+                let fileState = uploadData.file.state;
+                while (fileState === 'PROCESSING') {
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    const checkResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${API_KEY}`);
+                    const checkData = await checkResponse.json();
+                    fileState = checkData.state;
+                    if (fileState === 'FAILED') throw new Error('서버에서 동영상 처리에 실패했습니다.');
+                }
+
+                statusMessage.innerText = '3/3: 타임라인을 칼싱크로 정밀하게 분할하여 추출 중입니다...';
+                progressBar.style.width = '70%';
+                const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
+
+                // 말투 옵션에 따른 번역 규칙 분기
+                const toneValue = document.getElementById('toneSelect').value;
+                const toneRules = {
+                    anchor: '뉴스 아나운서의 톤앤매너로 번역한다. 어미는 "~습니다", "~했습니다" 체를 사용하라.',
+                    slang: '거친 반말체로 번역한다. 원문에 Fuck, Damn, Shit, Freaking 등 비속어가 있으면 존나, ㅆㅂ, 개같은, 미친, 쌈뽕하게 등 한국어 비속어/은어로 번역하라. 비속어가 없는 문장도 반말체("~했어", "~거든", "~잖아", "~ㅋㅋ")로 번역하라.',
+                    polite: '부드러운 존댓말로 번역한다. 어미는 "~했어요", "~할게요", "~인 것 같아요", "~거든요" 체를 사용하라.',
+                    stern: '강경하고 권위적인 공표체로 번역한다. 어미는 "~했다", "~이다", "~할 것이다", "~해야 한다" 체를 사용하라. 마치 대통령 성명서처럼 단호하게.'
+                };
+                const selectedToneRule = toneRules[toneValue] || toneRules.anchor;
+
+                const promptText = `
+                    첨부된 영상의 모든 대사를 빠짐없이 추출하고 한국어로 번역해 줘.
+                    너는 전문 영상 번역가이자 자막 편집자다. 다음 규칙을 반드시 준수하라:
+
+                    [🚨🚨🚨 가장 중요: 음성 누락 절대 금지]
+                    - 영상에서 들리는 모든 음성을 빠짐없이 추출하라. 단 한 마디도 빠뜨리지 마라.
+                    - 특히 짧은 구어체 표현(예: "For real?", "Can't", "No way", "You serious?", "Right", "Yeah", "Oh my God", "What the...", "Damn", "Come on", "Let's go", "Nah" 등)도 반드시 포함하라.
+                    - 감탄사, 추임새, 반응("Wow", "Oh", "Hmm", "Uh-huh" 등)도 들리면 반드시 포함하라.
+                    - 배경 대화가 아닌 이상, 화면에 등장하는 사람이 말하는 모든 것을 추출하라.
+
+                    [자막 분할 및 타임라인 규칙]
+                    1. 시작과 끝 시간 명시: 자막이 화면에 나타나는 시간(start)과 사라지는 시간(end)을 명확히 구분하라.
+                    2. ⏱️ 자막 간 공백 최소화 (매우 중요): 연속된 대사 사이에 불필요한 공백을 넣지 마라. 자막1의 end와 자막2의 start 사이에 실제로 침묵이 없다면 공백 없이 이어 붙여라. 오직 실제 침묵 구간(사람이 말하지 않는 시간)에서만 자막을 비워라.
+                    3. ⏱️ 자막 길이 절대 제한: 하나의 자막 항목(start~end)은 절대 7초를 초과해서는 안 된다.
+                    4. ⏱️ 최소 표시 시간: 한국어 번역 글자 수에 비례하여 충분한 표시 시간을 확보하라. 최소 2초 이상, 글자가 많으면(20자 이상) 최소 3초 이상을 확보하라. 2초 미만으로 사라지는 자막은 절대 만들지 마라.
+                    5. 문장 단위 분할: 한 자막에는 최대 1~2문장(약 30~40자)만 포함하라.
+                    6. 시간 순서 보장: start는 반드시 이전 자막의 end보다 같거나 커야 한다.
+                    7. 시간 형식 통일: 반드시 "MM:SS" 형식(예: 01:23)으로 통일하라. 소수점 사용 금지.
+                    8. 영상 끝까지 빠짐없이 추출하라.
+
+                    [번역 규칙 및 특수문자 절대 금지 🚨🚨🚨]
+                    1. 대사 원문(original)과 번역본(translation) 텍스트 안에는 어떠한 종류의 따옴표(큰따옴표 " 나 작은따옴표 ')도 절대 포함해서는 안 된다. 인용구가 있더라도 따옴표는 모두 삭제하고 내용만 출력하라.
+                    2. 텍스트 안에 줄바꿈(\\n) 특수문자를 절대 사용하지 마라.
+                    3. [번역 톤] ${selectedToneRule}
+                `;
+
+                const requestBody = {
+                    contents: [{ parts: [{ fileData: { fileUri: fileUri, mimeType: file.type } }, { text: promptText }] }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    start: { type: "STRING" },
+                                    end: { type: "STRING" },
+                                    original: { type: "STRING" },
+                                    translation: { type: "STRING" }
+                                },
+                                required: ["start", "end", "original", "translation"]
+                            }
+                        }
+                    }
+                };
+
+                const generateResponse = await fetch(generateUrl, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify(requestBody) 
+                });
+                
+                const generateData = await generateResponse.json();
+                if (generateData.error) throw new Error(`API 에러: ${generateData.error.message}`);
+                
+                let rawText = generateData.candidates[0].content.parts[0].text; 
+                let scripts;
+                
+                try {
+                    scripts = JSON.parse(rawText);
+                } catch (parseError) {
+                    throw new Error("데이터 파싱 오류가 발생했습니다. 브라우저를 새로고침 해주세요.");
+                }
+
+                // 후처리 1: 7초 초과 자막 분할
+                scripts = splitLongSubtitles(scripts, 7);
+
+                // 후처리 2: 자막 싱크 보정 (불필요한 공백 제거 + 최소 표시시간 보장)
+                scripts = fixSubtitleSync(scripts);
+
+                progressBar.style.width = '95%';
+
+                scripts.forEach(item => {
+                    editorArea.appendChild(createSubtitleRow(item));
+                });
+
+                progressBar.style.width = '100%';
+                statusMessage.innerText = '추출 및 번역이 완료되었습니다!';
+                renderOptions.style.display = 'block';
+
+                // X.com 스튜디오 활성화
+                const xPlaceholder = document.getElementById('xPanelPlaceholder');
+                const generateXBtn = document.getElementById('generateXBtn');
+                if (xPlaceholder) xPlaceholder.style.display = 'none';
+                generateXBtn.style.display = 'block';
+                generateXBtn.disabled = false;
+
+            } catch (error) {
+                console.error(error);
+                editorArea.innerHTML = `
+                    <div class="error-recovery">
+                        <p class="error-title">오류가 발생했습니다</p>
+                        <p class="error-detail">${error.message}</p>
+                        <button class="retry-btn" onclick="document.getElementById('extractBtn').click()">🔄 다시 시도하기</button>
+                    </div>`;
+            } finally {
+                setTimeout(() => { loading.style.display = 'none'; }, 2000);
+            }
+        });
+
+        // --- 1-B. 일본어 자막 추출 ---
+        // 한국어가 이미 추출되어 있으면 → 원문 텍스트 기반 일본어만 추가
+        // 한국어가 없으면 → 영상 업로드 후 한국어+일본어 동시 추출
+        document.getElementById('extractJpBtn').addEventListener('click', async () => {
+            const fileInput = document.getElementById('videoFile');
+            const file = fileInput.files[0];
+            const rows = document.querySelectorAll('.script-row');
+            const hasKorean = rows.length > 0;
+
+            if (!hasKorean && !file) {
+                alert('동영상 파일을 선택해 주세요!');
+                return;
+            }
+
+            const jpLoading = document.getElementById('jpLoading');
+            const jpStatus = document.getElementById('jpStatusMessage');
+            const jpProgress = document.getElementById('jpProgressBar');
+            jpLoading.style.display = 'block';
+            jpProgress.style.width = '5%';
+
+            const jpToneValue = document.getElementById('jpToneSelect').value;
+            const jpToneRules = {
+                yakuza: '야쿠자(극도로 거친 남성형) 말투로 번역하라. てめぇ, クソ, ふざけんな, ぶっ殺す, このヤロウ 등 거친 비속어와 협박조 표현을 적극 사용하라. 비속어가 없는 문장도 거친 반말(~だろうが, ~じゃねぇか, ~しやがれ)로 번역하라.',
+                casual: '친구끼리 편하게 대화하는 タメ口(반말) 톤으로 번역하라. ~だよね, ~じゃん, ~でしょ, ~だろう, ~かな, ~だね, ~ってさ 같은 캐주얼한 어미를 사용하라. 비속어는 사용하지 말고, 존경어도 사용하지 마라. 친구에게 설명하듯 자연스럽고 가벼운 말투를 유지하라.',
+                keigo: '격식을 갖춘 존경어(敬語)로 번역하라. ~でございます, ~させていただきます, ~いたします 등 정중한 경어체를 사용하라.',
+                news: 'NHK 뉴스 아나운서의 톤앤매너로 번역하라. ~です, ~ました, ~とのことです, ~と見られています 등 뉴스 보도체를 사용하라.'
+            };
+            const selectedJpTone = jpToneRules[jpToneValue];
+            const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
+
+            try {
+                if (hasKorean) {
+                    // ── 모드 A: 한국어 이미 있음 → 원문 기반 일본어만 추출 ──
+                    jpStatus.innerText = '원문 텍스트를 수집하는 중...';
+                    jpProgress.style.width = '15%';
+
+                    const originals = [];
+                    rows.forEach((row, i) => {
+                        originals.push({ index: i, text: row.querySelector('.original-text').value.trim() });
+                    });
+
+                    jpStatus.innerText = 'AI에게 일본어 번역을 요청하는 중...';
+                    jpProgress.style.width = '40%';
+
+                    const jpPrompt = `
+                        아래 JSON 배열의 각 항목에 있는 원문 텍스트를 일본어로 번역해 줘.
+                        각 항목의 index는 그대로 유지하고, japanese 필드에 일본어 번역을 넣어라.
+                        [번역 톤] ${selectedJpTone}
+                        [절대 규칙]
+                        1. 따옴표 절대 사용 금지.
+                        2. 줄바꿈(\\n) 절대 금지.
+                        3. index 순서와 개수를 원본과 정확히 일치시켜라.
+                        원문 데이터: ${JSON.stringify(originals)}
+                    `;
+
+                    const response = await fetch(generateUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: jpPrompt }] }],
+                            generationConfig: {
+                                responseMimeType: "application/json",
+                                responseSchema: { type: "ARRAY", items: { type: "OBJECT", properties: { index: { type: "INTEGER" }, japanese: { type: "STRING" } }, required: ["index", "japanese"] } }
+                            }
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (data.error) throw new Error(`API 에러: ${data.error.message}`);
+                    const jpResults = JSON.parse(data.candidates[0].content.parts[0].text);
+
+                    jpProgress.style.width = '85%';
+                    jpStatus.innerText = '일본어 자막을 적용하는 중...';
+
+                    const allRows = document.querySelectorAll('.script-row');
+                    for (const jp of jpResults) {
+                        if (jp.index >= 0 && jp.index < allRows.length) {
+                            const row = allRows[jp.index];
+                            let jpInput = row.querySelector('.japanese-text');
+                            if (!jpInput) {
+                                jpInput = document.createElement('textarea');
+                                jpInput.className = 'text-input japanese-text';
+                                row.querySelector('.text-container').appendChild(jpInput);
+                            }
+                            jpInput.value = jp.japanese || '';
+                        }
+                    }
+
+                } else {
+                    // ── 모드 B: 한국어 없음 → 영상 업로드 후 한국어+일본어 동시 추출 ──
+                    originalVideoFile = file;
+
+                    jpStatus.innerText = '1/4: 영상을 서버에 업로드하는 중...';
+                    jpProgress.style.width = '10%';
+                    const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${API_KEY}`;
+                    const uploadResponse = await fetch(uploadUrl, {
+                        method: 'POST',
+                        headers: { 'X-Goog-Upload-Protocol': 'raw', 'X-Goog-Upload-Command': 'start, upload, finalize', 'X-Goog-Upload-Header-Content-Length': file.size, 'X-Goog-Upload-Header-Content-Type': file.type, 'Content-Type': file.type },
+                        body: file
+                    });
+                    const uploadData = await uploadResponse.json();
+                    if (!uploadData.file || !uploadData.file.name) throw new Error('파일 업로드에 실패했습니다.');
+
+                    const fileName = uploadData.file.name;
+                    const fileUri = uploadData.file.uri;
+
+                    jpStatus.innerText = '2/4: 서버에서 영상을 처리 중...';
+                    jpProgress.style.width = '30%';
+                    let fileState = uploadData.file.state;
+                    while (fileState === 'PROCESSING') {
+                        await new Promise(resolve => setTimeout(resolve, 3000));
+                        const checkResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${API_KEY}`);
+                        const checkData = await checkResponse.json();
+                        fileState = checkData.state;
+                        if (fileState === 'FAILED') throw new Error('서버에서 동영상 처리에 실패했습니다.');
+                    }
+
+                    jpStatus.innerText = '3/4: 한국어+일본어 동시 번역 추출 중...';
+                    jpProgress.style.width = '55%';
+
+                    const toneValue = document.getElementById('toneSelect').value;
+                    const toneRules = {
+                        anchor: '뉴스 아나운서 톤. 어미는 "~습니다", "~했습니다" 체.',
+                        slang: '거친 반말체. 비속어 포함(존나, ㅆㅂ, 개같은 등). 반말(~했어, ~거든, ~잖아).',
+                        polite: '부드러운 존댓말. 어미는 "~했어요", "~할게요" 체.',
+                        stern: '강경 공표체. 어미는 "~했다", "~이다" 체. 대통령 성명서처럼.'
+                    };
+                    const selectedKoTone = toneRules[toneValue] || toneRules.anchor;
+
+                    const comboPrompt = `
+                        첨부된 영상의 모든 대사를 빠짐없이 추출하고, 한국어와 일본어로 동시에 번역해 줘.
+                        너는 전문 영상 번역가다. 다음 규칙을 반드시 준수하라:
+
+                        [음성 누락 절대 금지]
+                        - 영상에서 들리는 모든 음성을 빠짐없이 추출하라.
+                        - 짧은 구어체, 감탄사, 추임새도 반드시 포함.
+
+                        [자막 분할 및 타임라인]
+                        1. start/end 시간 명시. 자막 간 불필요한 공백 금지.
+                        2. 하나의 자막은 7초 이내. 최소 2초 이상.
+                        3. 한 자막에 1~2문장(30~40자). 시간 순서 보장.
+                        4. 시간 형식: "MM:SS". 소수점 금지. 영상 끝까지 추출.
+
+                        [번역 규칙]
+                        1. 따옴표(큰따옴표, 작은따옴표) 절대 금지.
+                        2. 줄바꿈(\\n) 절대 금지.
+                        3. [한국어 톤] ${selectedKoTone}
+                        4. [일본어 톤] ${selectedJpTone}
+                    `;
+
+                    const comboBody = {
+                        contents: [{ parts: [{ fileData: { fileUri: fileUri, mimeType: file.type } }, { text: comboPrompt }] }],
+                        generationConfig: {
+                            responseMimeType: "application/json",
+                            responseSchema: {
+                                type: "ARRAY",
+                                items: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        start: { type: "STRING" },
+                                        end: { type: "STRING" },
+                                        original: { type: "STRING" },
+                                        translation: { type: "STRING" },
+                                        japanese: { type: "STRING" }
+                                    },
+                                    required: ["start", "end", "original", "translation", "japanese"]
+                                }
+                            }
+                        }
+                    };
+
+                    const genResponse = await fetch(generateUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(comboBody)
+                    });
+
+                    const genData = await genResponse.json();
+                    if (genData.error) throw new Error(`API 에러: ${genData.error.message}`);
+
+                    let scripts = JSON.parse(genData.candidates[0].content.parts[0].text);
+                    scripts = splitLongSubtitles(scripts, 7);
+                    scripts = fixSubtitleSync(scripts);
+
+                    jpStatus.innerText = '4/4: 에디터에 적용하는 중...';
+                    jpProgress.style.width = '85%';
+
+                    const editorArea = document.getElementById('editorArea');
+                    const renderOptions = document.getElementById('renderOptions');
+                    editorArea.innerHTML = '';
+
+                    scripts.forEach(item => {
+                        const row = createSubtitleRow(item);
+                        // 일본어 textarea 추가
+                        if (item.japanese) {
+                            const jpInput = document.createElement('textarea');
+                            jpInput.className = 'text-input japanese-text';
+                            jpInput.value = item.japanese;
+                            row.querySelector('.text-container').appendChild(jpInput);
+                        }
+                        editorArea.appendChild(row);
+                    });
+
+                    renderOptions.style.display = 'block';
+
+                    // X.com 스튜디오 활성화
+                    const xPlaceholder = document.getElementById('xPanelPlaceholder');
+                    const generateXBtn = document.getElementById('generateXBtn');
+                    if (xPlaceholder) xPlaceholder.style.display = 'none';
+                    generateXBtn.style.display = 'block';
+                    generateXBtn.disabled = false;
+                }
+
+                jpProgress.style.width = '100%';
+                jpStatus.innerText = '한국어+일본어 자막 추출 완료!';
+                document.getElementById('exportJpSrtBtn').style.display = 'block';
+
+            } catch (error) {
+                console.error(error);
+                jpStatus.innerText = `오류: ${error.message}`;
+            } finally {
+                setTimeout(() => { jpLoading.style.display = 'none'; }, 3000);
+            }
+        });
+
+        // --- 2. X.com 마케팅 스튜디오 ---
+        let selectedEmoji = '';
+        let selectedXTitle = '';
+        let selectedXTags = [];
+
+        function updateXPreview() {
+            const previewBox = document.getElementById('xPreviewText');
+            let content = '';
+            if (selectedEmoji) content += `${selectedEmoji}\n`;
+            if (selectedXTitle) content += `${selectedXTitle}\n\n`;
+            if (selectedXTags.length > 0) content += `${selectedXTags.join(' ')}`;
+            previewBox.value = content;
+        }
+
+        document.querySelectorAll('.emoji-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const emoji = e.target.innerText;
+                if (btn.classList.contains('selected')) {
+                    btn.classList.remove('selected');
+                    selectedEmoji = '';
+                } else {
+                    document.querySelectorAll('.emoji-btn').forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    selectedEmoji = emoji;
+                }
+                updateXPreview();
+            });
+        });
+
+        document.getElementById('generateXBtn').addEventListener('click', async () => {
+            const xLoading = document.getElementById('xLoading');
+            const xContentArea = document.getElementById('xContentArea');
+            const titleList = document.getElementById('titleList');
+            const tagList = document.getElementById('tagList');
+            const tagCount = document.getElementById('tagCount');
+            const generateBtn = document.getElementById('generateXBtn');
+
+            let fullScript = '';
+            document.querySelectorAll('.translated-text').forEach(el => {
+                fullScript += el.value + ' ';
+            });
+
+            if (fullScript.trim() === '') {
+                alert('먼저 영상을 업로드하고 스크립트를 추출해주세요.');
+                return;
+            }
+
+            generateBtn.disabled = true;
+            xLoading.style.display = 'block';
+            xContentArea.style.display = 'none';
+
+            try {
+                const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
+                const promptText = `
+                    다음은 영상의 전체 번역 스크립트입니다: "${fullScript}"
+                    당신은 탁월한 정치/시사 유튜브 및 SNS 마케터입니다. 
+                    이 스크립트 내용을 바탕으로, 한국의 보수 성향 시청자들의 이목을 강력하게 끌고, 깊은 공감대를 형성할 수 있는(후킹이 강한) X.com(트위터) 업로드용 메타데이터를 작성해주세요.
+
+                    1. 제목: 클릭을 유도하고 감정적으로 동요하게 만드는, 직관적이고 강력한 한 줄 제목 10개를 추천해주세요. (따옴표 절대 사용 금지)
+                    2. 해시태그: 이 영상의 검색 노출(SEO)을 극대화할 수 있는 해시태그 30개를 추천해주세요. (앞에 #을 붙여주세요)
+                `;
+
+                const requestBody = {
+                    contents: [{ parts: [{ text: promptText }] }],
+                    generationConfig: { 
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                titles: { type: "ARRAY", items: { type: "STRING" } },
+                                hashtags: { type: "ARRAY", items: { type: "STRING" } }
+                            },
+                            required: ["titles", "hashtags"]
+                        }
+                    }
+                };
+
+                const response = await fetch(generateUrl, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify(requestBody) 
+                });
+                
+                const data = await response.json();
+                if(data.error) throw new Error(data.error.message);
+
+                let rawText = data.candidates[0].content.parts[0].text; 
+                let result = JSON.parse(rawText);
+
+                titleList.innerHTML = '';
+                tagList.innerHTML = '';
+                selectedXTitle = '';
+                selectedXTags = [];
+                updateXPreview();
+                tagCount.innerText = '0 / 5 선택됨';
+
+                result.titles.forEach(title => {
+                    const div = document.createElement('div');
+                    div.className = 'title-item';
+                    div.innerText = title;
+                    div.addEventListener('click', () => {
+                        document.querySelectorAll('.title-item').forEach(el => el.classList.remove('selected'));
+                        div.classList.add('selected');
+                        selectedXTitle = title;
+                        updateXPreview();
+                    });
+                    titleList.appendChild(div);
+                });
+
+                result.hashtags.forEach(tag => {
+                    const div = document.createElement('div');
+                    div.className = 'hashtag-item';
+                    div.innerText = tag;
+                    div.addEventListener('click', () => {
+                        const isSelected = div.classList.contains('selected');
+                        if (isSelected) {
+                            div.classList.remove('selected');
+                            selectedXTags = selectedXTags.filter(t => t !== tag);
+                        } else {
+                            if (selectedXTags.length >= 5) {
+                                alert('해시태그는 최대 5개까지만 선택 가능합니다.');
+                                return;
+                            }
+                            div.classList.add('selected');
+                            selectedXTags.push(tag);
+                        }
+                        tagCount.innerText = `${selectedXTags.length} / 5 선택됨`;
+                        if(selectedXTags.length === 5) tagCount.style.color = '#4CAF50';
+                        else tagCount.style.color = '#ef4444';
+                        
+                        updateXPreview();
+                    });
+                    tagList.appendChild(div);
+                });
+
+                xContentArea.style.display = 'block';
+
+            } catch (error) {
+                console.error(error);
+                alert(`카피 생성 중 오류가 발생했습니다: ${error.message}`);
+            } finally {
+                xLoading.style.display = 'none';
+                generateBtn.disabled = false;
+            }
+        });
+
+        document.getElementById('postToXBtn').addEventListener('click', () => {
+            const text = document.getElementById('xPreviewText').value;
+            if (!text.trim()) {
+                alert('게시할 내용을 먼저 구성해주세요. (제목 및 해시태그 선택)');
+                return;
+            }
+            const xUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}`;
+            (window.top || window).open(xUrl, '_blank');
+        });
+
+        // --- 3. AI 윤문 에디터 ---
+        let currentSelection = { targetElement: null, startPos: 0, endPos: 0, selectedText: "" };
+        document.addEventListener('mouseup', (e) => {
+            if (e.target.classList.contains('translated-text')) {
+                const textarea = e.target;
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                if (start !== end) {
+                    const text = textarea.value.substring(start, end).trim();
+                    if (text.length > 0) {
+                        currentSelection = { targetElement: textarea, startPos: start, endPos: end, selectedText: text };
+                        fetchAlternatives(text);
+                    }
+                }
+            }
+        });
+
+        async function fetchAlternatives(text) {
+            const resultsContainer = document.getElementById('suggestionResults');
+            const panelLoading = document.getElementById('panelLoading');
+            resultsContainer.innerHTML = ''; 
+            panelLoading.style.display = 'block';
+
+            try {
+                const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
+                const promptText = `다음 한국어 문장을 아나운서 톤으로 자연스럽게 다듬은 3가지 다른 버전을 제안해 줘. (따옴표 절대 금지) 원본: "${text}"`;
+                
+                const requestBody = {
+                    contents: [{ parts: [{ text: promptText }] }],
+                    generationConfig: { 
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "ARRAY",
+                            items: { type: "STRING" }
+                        }
+                    }
+                };
+
+                const response = await fetch(generateUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) });
+                const data = await response.json();
+                let rawText = data.candidates[0].content.parts[0].text; 
+                const alternatives = JSON.parse(rawText);
+                
+                panelLoading.style.display = 'none';
+                alternatives.forEach((alt, index) => {
+                    const box = document.createElement('div');
+                    box.className = 'suggestion-box';
+                    box.title = "더블클릭하면 텍스트가 교체됩니다.";
+                    box.innerHTML = `<b>버전 ${index + 1}</b><br>${alt}`;
+                    box.addEventListener('dblclick', () => {
+                        if (!currentSelection.targetElement) return;
+                        const textarea = currentSelection.targetElement;
+                        textarea.value = textarea.value.substring(0, currentSelection.startPos) + alt + textarea.value.substring(currentSelection.endPos);
+                        document.getElementById('suggestionResults').innerHTML = '<div style="color:#4CAF50; font-size:13px; text-align:center; margin-top:20px;">성공적으로 교체되었습니다.</div>';
+                        currentSelection = { targetElement: null, startPos: 0, endPos: 0, selectedText: "" };
+                    });
+                    resultsContainer.appendChild(box);
+                });
+            } catch (error) {
+                console.error(error);
+                panelLoading.style.display = 'none';
+                resultsContainer.innerHTML = '<div style="color:#ef4444; font-size:12px;">오류가 발생했습니다.</div>';
+            }
+        }
+
+        // --- 4. 고화질 영상 렌더링 및 AI 더빙 ---
+        // Fix: HH:MM:SS 포맷 지원을 위해 상단의 parseTimeStr()에 위임
+        function timeToSeconds(timeStr) {
+            return parseTimeStr(timeStr);
+        }
+
+        document.getElementById('renderBtn').addEventListener('click', async () => {
+            if (!originalVideoFile) { alert('영상 파일이 없습니다.'); return; }
+
+            const renderBtn = document.getElementById('renderBtn');
+            const useTTS = document.getElementById('useTtsCheckbox').checked; 
+            const renderLoading = document.getElementById('renderLoading');
+            const renderStatus = document.getElementById('renderStatus');
+            const canvas = document.getElementById('renderCanvas');
+            const ctx = canvas.getContext('2d');
+
+            renderBtn.disabled = true;
+            document.getElementById('useTtsCheckbox').disabled = true;
+            renderLoading.style.display = 'block';
+            canvas.style.display = 'block';
+
+            const subs = [];
+            document.querySelectorAll('.script-row').forEach(row => {
+                const startStr = row.querySelector('.start-time').value;
+                const endStr = row.querySelector('.end-time').value;
+                const text = row.querySelector('.translated-text').value;
+                const jpEl = row.querySelector('.japanese-text');
+                const jpText = jpEl ? jpEl.value : '';
+                subs.push({
+                    startSec: timeToSeconds(startStr),
+                    endSec: timeToSeconds(endStr),
+                    text: text,
+                    japanese: jpText,
+                    played: false
+                });
+            });
+
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const audioCtx = new AudioContext();
+            const dest = audioCtx.createMediaStreamDestination(); 
+
+            if (useTTS) {
+                renderStatus.innerText = `1/2: 자막에 맞춰 AI 아나운서 음성을 생성 중입니다... (약간의 시간이 소요됩니다)`;
+                for (let i = 0; i < subs.length; i++) {
+                    const sub = subs[i];
+                    if (sub.text.trim() === '') continue;
+                    
+                    try {
+                        const ttsUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${TTS_API_KEY}`;
+                        const reqBody = {
+                            input: { text: sub.text },
+                            voice: { languageCode: "ko-KR", name: "ko-KR-Neural2-A" }, 
+                            audioConfig: { audioEncoding: "MP3", speakingRate: 1.3 }
+                        };
+                        const response = await fetch(ttsUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(reqBody) });
+                        const data = await response.json();
+                        
+                        if (data.audioContent) {
+                            const binary = atob(data.audioContent);
+                            const array = new Uint8Array(binary.length);
+                            for(let j=0; j<binary.length; j++) array[j] = binary.charCodeAt(j);
+                            sub.audioBuffer = await audioCtx.decodeAudioData(array.buffer);
+                        }
+                    } catch(e) { console.error("TTS 생성 오류:", e); }
+                }
+            }
+
+            const renderVideo = document.createElement('video');
+            const renderVideoUrl = URL.createObjectURL(originalVideoFile);
+            renderVideo.src = renderVideoUrl;
+            renderVideo.playsInline = true;
+            // ⭐️ 근본 해결: createMediaElementSource 대신 captureStream 방식 사용
+            // createMediaElementSource는 브라우저 내부 샘플레이트 충돌로 '두두두' 잡음이 발생할 수 있음
+            // captureStream은 영상의 원본 오디오를 그대로 캡처하므로 잡음이 없음
+            // 미리보기: 비디오 자체에서 소리가 나옴 (muted=false)
+            renderVideo.volume = useTTS ? 0.3 : 1.0;
+
+            let currentTTSNode = null;
+
+            renderVideo.onloadedmetadata = () => {
+                // 사용자가 선택한 해상도에 맞춰 캔버스 크기 조절
+                const resChoice = document.getElementById('resolutionSelect').value;
+                const aspect = renderVideo.videoWidth / renderVideo.videoHeight;
+                
+                if (resChoice === '720') {
+                    canvas.height = 720;
+                    canvas.width = Math.round(720 * aspect);
+                } else if (resChoice === '1080') {
+                    canvas.height = 1080;
+                    canvas.width = Math.round(1080 * aspect);
+                } else {
+                    canvas.width = renderVideo.videoWidth;
+                    canvas.height = renderVideo.videoHeight;
+                }
+                
+                renderStatus.innerText = useTTS 
+                    ? `2/2: 더빙과 함께 영상 길이만큼 실시간 고화질 렌더링이 진행됩니다...` 
+                    : `자막만 입혀서 실시간 고화질 렌더링이 진행됩니다...`;
+                
+                const renderProgress = document.getElementById('renderProgress');
+
+                // X.com 호환 코덱 우선순위: H.264 + AAC in MP4
+                const _xCompatTypes = [
+                    'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',  // H.264 Baseline + AAC LC
+                    'video/mp4; codecs="avc1, mp4a.40.2"',
+                    'video/mp4; codecs=h264,aac',
+                    'video/mp4',
+                ];
+                let mimeType = _xCompatTypes.find(t => MediaRecorder.isTypeSupported(t));
+                const _needsTranscode = !mimeType; // H.264 직접 녹화 불가 시 FFmpeg 변환 필요
+                if (_needsTranscode) {
+                    mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+                        ? 'video/webm;codecs=vp9,opus' : 'video/webm';
+                    console.warn('[X.com] H.264 MP4 직접 녹화 불가. WebM으로 녹화 후 FFmpeg 변환 예정.');
+                }
+
+                // ⭐️ 핵심 해결책: 화질(Bitrate)을 8Mbps로 강제 고정하여 깨짐 현상 방지
+                const recorderOptions = {
+                    mimeType: mimeType,
+                    videoBitsPerSecond: 8000000,
+                    audioBitsPerSecond: 128000
+                };
+
+                let drawFrameTimer = null; // Fix: 타이머 ID 보관 (안전 종료용)
+                let recorder = null; // ⭐️ Fix: canplay 직전에 생성하여 스트림 타임스탬프 동기화
+                function drawFrame() {
+                    if (renderVideo.paused || renderVideo.ended) return;
+                    
+                    // ⭐️ 렌더링 진행도(퍼센트) 실시간 업데이트
+                    if (renderVideo.duration) {
+                        const progress = Math.min(100, Math.floor((renderVideo.currentTime / renderVideo.duration) * 100));
+                        renderProgress.innerText = `${progress}% 완료`;
+                    }
+                    
+                    ctx.drawImage(renderVideo, 0, 0, canvas.width, canvas.height);
+
+                    const currentTime = renderVideo.currentTime;
+                    let currentSub = null;
+                    
+                    for (let i = 0; i < subs.length; i++) {
+                        const sub = subs[i];
+
+                        if (useTTS && currentTime >= sub.startSec && !sub.played) {
+                            sub.played = true;
+                            if (currentTTSNode) { try { currentTTSNode.stop(); } catch(e) {} }
+                            if (sub.audioBuffer) {
+                                const source = audioCtx.createBufferSource();
+                                source.buffer = sub.audioBuffer;
+                                source.connect(dest); // 녹화용
+                                source.connect(audioCtx.destination); // 미리보기 스피커 출력
+                                // Fix: 자막 구간 길이만큼만 재생 (오버런으로 다음 자막과 겹치는 문제 방지)
+                                const maxDuration = Math.max(sub.endSec - sub.startSec, 0.1);
+                                source.start(0, 0, maxDuration);
+                                currentTTSNode = source;
+                            }
+                        }
+
+                        if (currentTime >= sub.startSec && currentTime <= sub.endSec) {
+                            currentSub = sub;
+                        }
+                    }
+
+                    // ── 화자 라벨 렌더링 ──
+                    const speakerLabelsData = getSpeakerLabels();
+                    const currentSubIndex = subs.indexOf(currentSub);
+                    for (const label of speakerLabelsData) {
+                        // 자막 인덱스 기반 (1-based → 0-based)
+                        const fromIdx = label.from - 1;
+                        const toIdx = label.to - 1;
+                        if (currentSubIndex >= fromIdx && currentSubIndex <= toIdx) {
+                            const labelFontSize = Math.floor(canvas.height * 0.028);
+                            ctx.save();
+                            ctx.font = `600 ${labelFontSize}px "Pretendard", "Malgun Gothic", sans-serif`;
+                            ctx.textAlign = 'left';
+                            ctx.textBaseline = 'top';
+
+                            const padX = labelFontSize * 0.6;
+                            const padY = labelFontSize * 0.4;
+                            const lx = canvas.width * 0.03;
+                            const ly = canvas.height * 0.04;
+                            const lineHeight = labelFontSize * 1.4;
+                            const maxLabelWidth = canvas.width * 0.9 - lx * 2;
+
+                            // 사용자 줄바꿈(\n) + 캔버스 초과 시 자동 줄바꿈
+                            const rawLines = label.text.split('\n');
+                            const lines = [];
+                            for (const rawLine of rawLines) {
+                                const words = rawLine.split('');
+                                let cur = '';
+                                for (const ch of words) {
+                                    const test = cur + ch;
+                                    if (ctx.measureText(test).width > maxLabelWidth && cur.length > 0) {
+                                        lines.push(cur);
+                                        cur = ch;
+                                    } else {
+                                        cur = test;
+                                    }
+                                }
+                                if (cur) lines.push(cur);
+                            }
+
+                            const maxLineW = Math.max(...lines.map(l => ctx.measureText(l).width));
+                            const bw = maxLineW + padX * 2;
+                            const bh = lineHeight * lines.length + padY * 2;
+                            const rr = labelFontSize * 0.5;
+
+                            // ── 시간 기반 애니메이션 파라미터 ──
+                            const now = Date.now() / 1000;
+                            const breathe = 0.5 + 0.5 * Math.sin(now * 1.8);        // 0~1 느린 호흡
+                            const shimmerX = ((now * 0.4) % 1.6) - 0.3;              // 쉬머 위치 -0.3~1.3
+                            const pulse = 0.6 + 0.4 * Math.sin(now * 3.0);           // 빠른 펄스
+                            const hueShift = (now * 15) % 360;                        // 색상 회전
+
+                            // ── 1) 외곽 골든 글로우 (호흡하는 듯한 애니메이션) ──
+                            ctx.shadowColor = `hsla(${45 + Math.sin(now * 2) * 10}, 100%, 60%, ${0.4 + breathe * 0.4})`;
+                            ctx.shadowBlur = labelFontSize * (0.8 + breathe * 1.2);
+                            ctx.shadowOffsetX = 0;
+                            ctx.shadowOffsetY = 0;
+
+                            // ── 2) 글래스모피즘 배경 (다층 반투명) ──
+                            // 바깥 글로우 영역
+                            ctx.beginPath();
+                            ctx.roundRect(lx - 2, ly - 2, bw + 4, bh + 4, rr + 2);
+                            ctx.fillStyle = `rgba(255, 200, 50, ${0.08 + breathe * 0.07})`;
+                            ctx.fill();
+
+                            // 메인 글래스 배경
+                            ctx.shadowColor = 'transparent';
+                            ctx.shadowBlur = 0;
+                            const glassBg = ctx.createLinearGradient(lx, ly, lx + bw, ly + bh);
+                            glassBg.addColorStop(0, `rgba(20, 20, 40, 0.75)`);
+                            glassBg.addColorStop(0.5, `rgba(40, 35, 60, 0.65)`);
+                            glassBg.addColorStop(1, `rgba(20, 20, 40, 0.75)`);
+                            ctx.beginPath();
+                            ctx.roundRect(lx, ly, bw, bh, rr);
+                            ctx.fillStyle = glassBg;
+                            ctx.fill();
+
+                            // ── 3) 쉬머 라이트 스윕 (좌→우 반복) ──
+                            ctx.save();
+                            ctx.beginPath();
+                            ctx.roundRect(lx, ly, bw, bh, rr);
+                            ctx.clip();
+
+                            const shimmerCenterX = lx + bw * shimmerX;
+                            const shimmerW = bw * 0.35;
+                            const shimmerGrad = ctx.createLinearGradient(
+                                shimmerCenterX - shimmerW, ly,
+                                shimmerCenterX + shimmerW, ly
+                            );
+                            shimmerGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+                            shimmerGrad.addColorStop(0.4, `rgba(255, 220, 100, ${0.12 + pulse * 0.08})`);
+                            shimmerGrad.addColorStop(0.5, `rgba(255, 255, 255, ${0.18 + pulse * 0.1})`);
+                            shimmerGrad.addColorStop(0.6, `rgba(255, 220, 100, ${0.12 + pulse * 0.08})`);
+                            shimmerGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                            ctx.fillStyle = shimmerGrad;
+                            ctx.fillRect(lx, ly, bw, bh);
+                            ctx.restore();
+
+                            // ── 4) 상단 하이라이트 엣지 (글래스 반사) ──
+                            ctx.beginPath();
+                            ctx.roundRect(lx, ly, bw, bh * 0.45, rr);
+                            const topHighlight = ctx.createLinearGradient(lx, ly, lx, ly + bh * 0.45);
+                            topHighlight.addColorStop(0, `rgba(255, 255, 255, ${0.10 + breathe * 0.06})`);
+                            topHighlight.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                            ctx.fillStyle = topHighlight;
+                            ctx.fill();
+
+                            // ── 5) 애니메이션 보더 (골든 그라디언트 회전) ──
+                            ctx.beginPath();
+                            ctx.roundRect(lx, ly, bw, bh, rr);
+                            const borderGrad = ctx.createLinearGradient(
+                                lx + bw * (0.5 + 0.5 * Math.cos(now * 1.5)),
+                                ly,
+                                lx + bw * (0.5 + 0.5 * Math.sin(now * 1.5)),
+                                ly + bh
+                            );
+                            borderGrad.addColorStop(0, `hsla(${40 + hueShift * 0.3}, 90%, 65%, ${0.6 + breathe * 0.3})`);
+                            borderGrad.addColorStop(0.5, `hsla(${50 + hueShift * 0.2}, 100%, 75%, ${0.3 + pulse * 0.2})`);
+                            borderGrad.addColorStop(1, `hsla(${35 + hueShift * 0.3}, 85%, 55%, ${0.6 + breathe * 0.3})`);
+                            ctx.strokeStyle = borderGrad;
+                            ctx.lineWidth = Math.max(1.5, labelFontSize * 0.08);
+                            ctx.stroke();
+
+                            // ── 6) 텍스트: 골든 그라디언트 + 글로우 ──
+                            for (let li = 0; li < lines.length; li++) {
+                                const ty = ly + padY + li * lineHeight;
+
+                                // 텍스트 글로우 (뒤에 깔리는 빛)
+                                ctx.shadowColor = `rgba(255, 200, 50, ${0.5 + breathe * 0.3})`;
+                                ctx.shadowBlur = labelFontSize * (0.3 + breathe * 0.4);
+                                ctx.shadowOffsetX = 0;
+                                ctx.shadowOffsetY = 0;
+
+                                // 텍스트 아웃라인
+                                ctx.strokeStyle = `rgba(120, 80, 0, 0.6)`;
+                                ctx.lineWidth = labelFontSize * 0.06;
+                                ctx.lineJoin = 'round';
+                                ctx.strokeText(lines[li], lx + padX, ty);
+
+                                // 텍스트 골든 그라디언트
+                                const textGrad = ctx.createLinearGradient(lx + padX, ty, lx + padX, ty + labelFontSize);
+                                textGrad.addColorStop(0, `hsl(${48 + Math.sin(now * 2) * 5}, 100%, ${85 + breathe * 10}%)`);
+                                textGrad.addColorStop(0.45, '#FFFFFF');
+                                textGrad.addColorStop(0.55, '#FFFFFF');
+                                textGrad.addColorStop(1, `hsl(${40 + Math.sin(now * 2.5) * 5}, 95%, ${70 + breathe * 10}%)`);
+                                ctx.fillStyle = textGrad;
+                                ctx.shadowColor = 'transparent';
+                                ctx.shadowBlur = 0;
+                                ctx.fillText(lines[li], lx + padX, ty);
+                            }
+
+                            // ── 7) 모서리 스파클 (네 귀퉁이에 작은 빛 점) ──
+                            const sparkleAlpha = 0.3 + pulse * 0.5;
+                            const sparkleR = labelFontSize * (0.12 + breathe * 0.08);
+                            const corners = [
+                                [lx + rr * 0.7, ly + rr * 0.7],
+                                [lx + bw - rr * 0.7, ly + rr * 0.7],
+                                [lx + rr * 0.7, ly + bh - rr * 0.7],
+                                [lx + bw - rr * 0.7, ly + bh - rr * 0.7]
+                            ];
+                            for (const [cx, cy] of corners) {
+                                const sparkGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, sparkleR * 3);
+                                sparkGrad.addColorStop(0, `rgba(255, 255, 220, ${sparkleAlpha})`);
+                                sparkGrad.addColorStop(0.3, `rgba(255, 210, 80, ${sparkleAlpha * 0.5})`);
+                                sparkGrad.addColorStop(1, 'rgba(255, 200, 50, 0)');
+                                ctx.fillStyle = sparkGrad;
+                                ctx.beginPath();
+                                ctx.arc(cx, cy, sparkleR * 3, 0, Math.PI * 2);
+                                ctx.fill();
+                            }
+                            ctx.restore();
+                            break; // 첫 번째 매칭 라벨만
+                        }
+                    }
+
+                    // ── 자막 텍스트 렌더링 ──
+                    const hasKoSub = currentSub && currentSub.text.trim() !== '';
+                    const hasJpSub = currentSub && currentSub.japanese && currentSub.japanese.trim() !== '';
+
+                    if (hasKoSub || hasJpSub) {
+                        // 가로/세로 영상에 따른 폰트 크기 조절
+                        const isLandscape = canvas.width > canvas.height;
+                        const fontSize = isLandscape
+                            ? Math.floor(canvas.height * 0.055)  // 가로영상: 더 큰 폰트
+                            : Math.floor(canvas.height * 0.04);  // 세로영상: 기존 크기
+
+                        const maxWidth = canvas.width * 0.88;
+                        const lineHeight = fontSize * 1.5;
+                        const x = canvas.width / 2;
+
+                        // ── 줄바꿈 헬퍼 (isJapanese: 글자 단위 강제 줄바꿈) ──
+                        function wrapTextLines(text, font, mw, isJapanese) {
+                            ctx.font = font;
+                            const sentenceSplits = text
+                                .split(/(?<=[.?!。！？])\s*|(?<=습니다)\s+|(?<=했다)\s+|(?<=이다)\s+/)
+                                .filter(s => s.trim().length > 0);
+                            const result = [];
+                            for (const sentence of sentenceSplits) {
+                                // 일본어는 항상 글자 단위 줄바꿈 (공백 있어도)
+                                if (isJapanese) {
+                                    let line = '';
+                                    for (const ch of sentence) {
+                                        const test = line + ch;
+                                        if (ctx.measureText(test).width > mw && line.length > 0) {
+                                            result.push(line);
+                                            line = ch;
+                                        } else { line = test; }
+                                    }
+                                    if (line) result.push(line);
+                                } else if (sentence.includes(' ')) {
+                                    const words = sentence.split(' ');
+                                    let line = '';
+                                    for (let n = 0; n < words.length; n++) {
+                                        let testLine = line + words[n] + ' ';
+                                        if (ctx.measureText(testLine).width > mw && n > 0) {
+                                            result.push(line.trim());
+                                            line = words[n] + ' ';
+                                        } else { line = testLine; }
+                                    }
+                                    if (line.trim()) result.push(line.trim());
+                                } else {
+                                    let line = '';
+                                    for (const ch of sentence) {
+                                        const test = line + ch;
+                                        if (ctx.measureText(test).width > mw && line.length > 0) {
+                                            result.push(line);
+                                            line = ch;
+                                        } else { line = test; }
+                                    }
+                                    if (line) result.push(line);
+                                }
+                            }
+                            return result;
+                        }
+
+                        // ── 한국어 자막 줄 계산 ──
+                        const koFont = `700 ${fontSize}px "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif`;
+                        const koLines = hasKoSub ? wrapTextLines(currentSub.text, koFont, maxWidth, false) : [];
+
+                        // ── 일본어 자막 줄 계산 (약간 작은 폰트, 다른 색) ──
+                        const jpFontSize = Math.floor(fontSize * 0.85);
+                        const jpLineHeight = jpFontSize * 1.5;
+                        const jpFont = `700 ${jpFontSize}px "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif`;
+                        const jpLines = hasJpSub ? wrapTextLines(currentSub.japanese, jpFont, maxWidth, true) : [];
+
+                        // ── Y 좌표 계산: 일본어가 아래, 한국어가 위 ──
+                        const bottomMargin = fontSize * 1.0;
+                        const jpBlockHeight = jpLines.length * jpLineHeight;
+                        const koBlockHeight = koLines.length * lineHeight;
+                        const gapBetween = (hasKoSub && hasJpSub) ? fontSize * 0.5 : 0;
+
+                        const jpStartY = canvas.height - bottomMargin - jpBlockHeight + jpLineHeight;
+                        const koBottomY = hasJpSub ? (jpStartY - jpLineHeight + jpFontSize * 0.2 - gapBetween) : (canvas.height - bottomMargin);
+                        const koStartY = koBottomY - ((koLines.length - 1) * lineHeight);
+
+                        // ── 그라데이션: 실제 자막 줄 수에 맞춰 동적 높이 ──
+                        const totalSubHeight = koBlockHeight + jpBlockHeight + gapBetween + bottomMargin;
+                        const gradPadding = fontSize * 2.0; // 자막 위쪽 여유 페이드 공간
+                        const gradHeight = totalSubHeight + gradPadding;
+                        const gradY = canvas.height - gradHeight;
+
+                        const gradient = ctx.createLinearGradient(0, gradY, 0, canvas.height);
+                        gradient.addColorStop(0, 'rgba(0,0,0,0)');
+                        gradient.addColorStop(0.25, 'rgba(0,0,0,0.4)');
+                        gradient.addColorStop(0.55, 'rgba(0,0,0,0.75)');
+                        gradient.addColorStop(1, 'rgba(0,0,0,0.95)');
+                        ctx.fillStyle = gradient;
+                        ctx.fillRect(0, gradY, canvas.width, gradHeight);
+
+                        // ── 한국어 자막 그리기 ──
+                        if (hasKoSub && koLines.length > 0) {
+                            ctx.font = koFont;
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'bottom';
+                            ctx.lineWidth = Math.floor(fontSize * 0.12);
+                            ctx.lineJoin = 'round';
+                            ctx.strokeStyle = 'black';
+                            ctx.fillStyle = 'white';
+                            ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+                            ctx.shadowBlur = 4;
+                            ctx.shadowOffsetX = 1;
+                            ctx.shadowOffsetY = 1;
+
+                            for (let i = 0; i < koLines.length; i++) {
+                                const currentY = koStartY + (i * lineHeight);
+                                ctx.strokeText(koLines[i], x, currentY);
+                                ctx.shadowColor = 'transparent';
+                                ctx.fillText(koLines[i], x, currentY);
+                                ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+                            }
+                        }
+
+                        // ── 일본어 자막 그리기 ──
+                        if (hasJpSub && jpLines.length > 0) {
+                            ctx.font = jpFont;
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'bottom';
+                            ctx.lineWidth = Math.floor(jpFontSize * 0.12);
+                            ctx.lineJoin = 'round';
+                            ctx.strokeStyle = 'black';
+                            ctx.fillStyle = '#FFD700';
+                            ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+                            ctx.shadowBlur = 4;
+                            ctx.shadowOffsetX = 1;
+                            ctx.shadowOffsetY = 1;
+
+                            for (let i = 0; i < jpLines.length; i++) {
+                                const currentY = jpStartY + (i * jpLineHeight);
+                                ctx.strokeText(jpLines[i], x, currentY);
+                                ctx.shadowColor = 'transparent';
+                                ctx.fillText(jpLines[i], x, currentY);
+                                ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+                            }
+                        }
+                    }
+
+                    // 워터마크 그리기 (이미지 업로드된 경우에만)
+                    _wmRender(ctx, canvas);
+
+                    // 브라우저 탭이 백그라운드로 가면 requestAnimationFrame이 멈추는 현상 방지
+                    drawFrameTimer = setTimeout(drawFrame, 1000 / 30); // 약 30FPS 강제 유지
+                }
+
+                audioCtx.resume().then(() => {
+                    // ⭐️ Fix: captureStream을 recorder.start() 직전에 생성
+                    // 기존: onloadedmetadata에서 생성 → canplay까지 수백ms 간격 발생
+                    //       → 캔버스 스트림 내부 타임스탬프가 오디오 트랙보다 앞서 쌓임
+                    //       → 첫 번째 내보내기에서 자막이 음성보다 점점 앞서 나오는 드리프트 발생
+                    // 수정: canplay 콜백에서 생성 → 스트림 타임스탬프와 녹화 시작점이 동기화됨
+                    renderVideo.addEventListener('canplay', () => {
+                        // captureStream을 녹화 시작 직전에 생성 (타임스탬프 동기화)
+                        const videoMediaStream = renderVideo.captureStream();
+                        const videoAudioSource = audioCtx.createMediaStreamSource(videoMediaStream);
+                        const videoGain = audioCtx.createGain();
+                        videoGain.gain.value = useTTS ? 0.3 : 1.0;
+                        videoAudioSource.connect(videoGain);
+                        videoGain.connect(dest);
+
+                        const canvasStream = canvas.captureStream(30);
+                        const combinedStream = new MediaStream([...canvasStream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+
+                        recorder = new MediaRecorder(combinedStream, recorderOptions);
+                        const chunks = [];
+                        recorder.ondataavailable = e => chunks.push(e.data);
+
+                        recorder.onstop = async () => {
+                            let blob = new Blob(chunks, { type: mimeType });
+
+                            // H.264 직접 녹화 불가능한 환경이면 FFmpeg.wasm으로 변환
+                            if (_needsTranscode) {
+                                try {
+                                    blob = await _transcodeToXCompatMP4(blob, renderStatus);
+                                } catch (e) {
+                                    console.error('[FFmpeg] 변환 실패:', e);
+                                    renderStatus.innerText = '⚠️ X.com 변환 실패. WebM으로 다운로드됩니다 (X.com 재인코딩 필요).';
+                                }
+                            }
+
+                            const extension = blob.type.includes('mp4') ? 'mp4' : 'webm';
+                            const url = URL.createObjectURL(blob);
+
+                            const a = document.createElement('a');
+                            a.style.display = 'none';
+                            a.href = url;
+                            a.download = useTTS ? `dubbed_video_HD.${extension}` : `subtitled_video_HD.${extension}`;
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove(); // Fix: DOM에서 즉시 제거 (누적 방지)
+
+                            // Fix: 브라우저가 다운로드를 시작할 시간을 준 뒤 URL 해제
+                            setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+                            URL.revokeObjectURL(renderVideoUrl); // Fix: 렌더링용 비디오 ObjectURL 해제
+
+                            renderStatus.innerText = '🎉 고화질 렌더링 완료! 다운로드가 시작되었습니다.';
+                            renderBtn.disabled = false;
+                            document.getElementById('useTtsCheckbox').disabled = false;
+                            setTimeout(() => { renderLoading.style.display = 'none'; canvas.style.display = 'none'; audioCtx.close(); }, 5000);
+                        };
+
+                        recorder.start(1000); // 1초마다 데이터 수집하여 안정적 녹화
+                        drawFrame();
+                    }, { once: true });
+                    renderVideo.play().catch(e => console.error("비디오 재생 에러:", e));
+                });
+
+                renderVideo.onended = () => {
+                    clearTimeout(drawFrameTimer);
+
+                    // ── 엔드스크린 삽입 ──
+                    const useEndScreen = document.getElementById('useEndScreen').checked;
+                    if (useEndScreen) {
+                        const esDuration = parseInt(document.getElementById('endScreenDuration').value) || 5;
+                        const esStyle = document.getElementById('endScreenStyle').value;
+                        const esTitle = document.getElementById('endScreenTitle').value.trim();
+                        const esSubtitle = document.getElementById('endScreenSubtitle').value.trim();
+                        const esTotalFrames = esDuration * 30;
+                        let esFrame = 0;
+
+                        renderStatus.innerText = '엔드스크린 렌더링 중...';
+
+                        function drawEndScreen() {
+                            if (esFrame >= esTotalFrames) {
+                                setTimeout(() => recorder.stop(), 100);
+                                return;
+                            }
+                            const frameT = esFrame / esTotalFrames;
+                            drawEndScreenFrame(ctx, canvas, frameT, {
+                                style: esStyle,
+                                title: esTitle || null,
+                                subtitle: esSubtitle || null
+                            });
+                            esFrame++;
+                            setTimeout(drawEndScreen, 1000 / 30);
+                        }
+                        drawEndScreen();
+                    } else {
+                        setTimeout(() => recorder.stop(), 100);
+                    }
+                };
+
+                // Fix: 비디오 로드 오류 시 AudioContext 및 ObjectURL 정리
+                renderVideo.onerror = () => {
+                    clearTimeout(drawFrameTimer);
+                    renderStatus.innerText = '오류: 비디오를 불러올 수 없습니다. 다시 시도해 주세요.';
+                    renderBtn.disabled = false;
+                    document.getElementById('useTtsCheckbox').disabled = false;
+                    renderLoading.style.display = 'none';
+                    URL.revokeObjectURL(renderVideoUrl);
+                    audioCtx.close();
+                };
+            };
+        });
+        // --- 5. SRT 파일 추출 및 다운로드 기능 ---
+        document.getElementById('exportSrtBtn').addEventListener('click', () => {
+            const rows = document.querySelectorAll('.script-row');
+            if (rows.length === 0) {
+                alert('추출된 자막이 없습니다. 먼저 1번 버튼을 눌러 스크립트를 추출해주세요.');
+                return;
+            }
+
+            let srtContent = '';
+            let srtIndex = 1;
+
+            // 시간을 SRT 표준 형식(HH:MM:SS,000)으로 변환하는 헬퍼 함수
+            function formatTimeForSrt(timeStr) {
+                if (!timeStr) return "00:00:00,000";
+                
+                // 공백 제거나 불필요한 문자 제거
+                const cleanStr = timeStr.replace(/[^0-9:]/g, ''); 
+                const parts = cleanStr.split(':');
+                
+                let h = 0, m = 0, s = 0;
+                
+                if (parts.length === 3) { // HH:MM:SS 형식
+                    h = parseInt(parts[0], 10) || 0;
+                    m = parseInt(parts[1], 10) || 0;
+                    s = parseInt(parts[2], 10) || 0;
+                } else if (parts.length === 2) { // MM:SS 형식
+                    m = parseInt(parts[0], 10) || 0;
+                    s = parseInt(parts[1], 10) || 0;
+                } else { // SS 형식
+                    s = parseInt(parts[0], 10) || 0;
+                }
+                
+                // 두 자리 수로 패딩 (예: 5 -> 05)
+                const pad = (num) => String(num).padStart(2, '0');
+                
+                // 밀리초는 000으로 고정 (현재 Gemini가 초 단위까지만 주기 때문)
+                return `${pad(h)}:${pad(m)}:${pad(s)},000`;
+            }
+
+            rows.forEach(row => {
+                const startTime = row.querySelector('.start-time').value;
+                const endTime = row.querySelector('.end-time').value;
+                const translatedText = row.querySelector('.translated-text').value.trim();
+
+                // 텍스트가 있는 경우에만 SRT 블록 생성
+                if (translatedText) {
+                    srtContent += `${srtIndex}\n`;
+                    srtContent += `${formatTimeForSrt(startTime)} --> ${formatTimeForSrt(endTime)}\n`;
+                    srtContent += `${translatedText}\n\n`;
+                    srtIndex++;
+                }
+            });
+
+            // Blob을 이용해 .srt 파일로 만들어 브라우저에서 다운로드 처리
+            const blob = new Blob([srtContent], { type: 'text/srt;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            
+            const downloadLink = document.createElement('a');
+            downloadLink.href = url;
+            downloadLink.download = 'translated_subtitles.srt'; // 다운로드될 파일명
+            downloadLink.style.display = 'none';
+            
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            
+            document.body.removeChild(downloadLink);
+            URL.revokeObjectURL(url);
+        });
+
+        // --- 5-A. 일본어 SRT 파일 다운로드 ---
+        document.getElementById('exportJpSrtBtn').addEventListener('click', () => {
+            const rows = document.querySelectorAll('.script-row');
+            if (rows.length === 0) {
+                alert('추출된 자막이 없습니다.');
+                return;
+            }
+
+            let srtContent = '';
+            let srtIndex = 1;
+
+            function formatTimeForSrt(timeStr) {
+                if (!timeStr) return "00:00:00,000";
+                const cleanStr = timeStr.replace(/[^0-9:]/g, '');
+                const parts = cleanStr.split(':');
+                let h = 0, m = 0, s = 0;
+                if (parts.length === 3) { h = parseInt(parts[0], 10) || 0; m = parseInt(parts[1], 10) || 0; s = parseInt(parts[2], 10) || 0; }
+                else if (parts.length === 2) { m = parseInt(parts[0], 10) || 0; s = parseInt(parts[1], 10) || 0; }
+                else { s = parseInt(parts[0], 10) || 0; }
+                const pad = (num) => String(num).padStart(2, '0');
+                return `${pad(h)}:${pad(m)}:${pad(s)},000`;
+            }
+
+            rows.forEach(row => {
+                const startTime = row.querySelector('.start-time').value;
+                const endTime = row.querySelector('.end-time').value;
+                const jpEl = row.querySelector('.japanese-text');
+                const jpText = jpEl ? jpEl.value.trim() : '';
+
+                if (jpText) {
+                    srtContent += `${srtIndex}\n`;
+                    srtContent += `${formatTimeForSrt(startTime)} --> ${formatTimeForSrt(endTime)}\n`;
+                    srtContent += `${jpText}\n\n`;
+                    srtIndex++;
+                }
+            });
+
+            const blob = new Blob([srtContent], { type: 'text/srt;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const downloadLink = document.createElement('a');
+            downloadLink.href = url;
+            downloadLink.download = 'japanese_subtitles.srt';
+            downloadLink.style.display = 'none';
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+            URL.revokeObjectURL(url);
+        });
+
+        // --- 5-B. 원문 자막만 SRT 추출 (번역 없이) ---
+        document.getElementById('extractOriginalSrtBtn').addEventListener('click', async () => {
+            const fileInput = document.getElementById('videoFile');
+            const file = fileInput.files[0];
+            const srtLoading = document.getElementById('srtLoading');
+            const srtStatus = document.getElementById('srtStatusMessage');
+            const srtProgress = document.getElementById('srtProgressBar');
+
+            if (!file) { alert('동영상 파일을 선택해 주세요!'); return; }
+
+            srtLoading.style.display = 'block';
+            srtProgress.style.width = '0%';
+            document.getElementById('extractOriginalSrtBtn').disabled = true;
+
+            try {
+                srtStatus.innerText = '1/3: 영상을 서버에 업로드하는 중...';
+                srtProgress.style.width = '15%';
+                const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${API_KEY}`;
+                const uploadResponse = await fetch(uploadUrl, {
+                    method: 'POST',
+                    headers: { 'X-Goog-Upload-Protocol': 'raw', 'X-Goog-Upload-Command': 'start, upload, finalize', 'X-Goog-Upload-Header-Content-Length': file.size, 'X-Goog-Upload-Header-Content-Type': file.type, 'Content-Type': file.type },
+                    body: file
+                });
+                const uploadData = await uploadResponse.json();
+                if (!uploadData.file || !uploadData.file.name) throw new Error('파일 업로드에 실패했습니다.');
+
+                const fileName = uploadData.file.name;
+                const fileUri = uploadData.file.uri;
+
+                srtStatus.innerText = '2/3: 서버에서 영상을 처리 중입니다...';
+                srtProgress.style.width = '40%';
+                let fileState = uploadData.file.state;
+                while (fileState === 'PROCESSING') {
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    const checkResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${API_KEY}`);
+                    const checkData = await checkResponse.json();
+                    fileState = checkData.state;
+                    if (fileState === 'FAILED') throw new Error('서버에서 동영상 처리에 실패했습니다.');
+                }
+
+                srtStatus.innerText = '3/3: 원문 자막을 추출하는 중...';
+                srtProgress.style.width = '70%';
+                const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
+
+                const promptText = `
+                    첨부된 영상의 모든 대사를 빠짐없이 원어 그대로 추출해 줘.
+                    번역하지 마라. 영어면 영어, 한국어면 한국어, 일본어면 일본어, 중국어면 중국어 등 원래 언어 그대로 받아적어라.
+
+                    [🚨🚨🚨 가장 중요: 음성 누락 절대 금지]
+                    - 영상에서 들리는 모든 음성을 빠짐없이 추출하라. 단 한 마디도 빠뜨리지 마라.
+                    - 감탄사, 추임새, 반응도 들리면 반드시 포함하라.
+                    - 배경 대화가 아닌 이상, 화면에 등장하는 사람이 말하는 모든 것을 추출하라.
+
+                    [자막 분할 및 타임라인 규칙]
+                    1. 시작과 끝 시간 명시: 자막이 화면에 나타나는 시간(start)과 사라지는 시간(end)을 명확히 구분하라.
+                    2. 자막 간 공백 최소화: 연속된 대사 사이에 불필요한 공백을 넣지 마라. 실제 침묵 구간에서만 자막을 비워라.
+                    3. 자막 길이 제한: 하나의 자막 항목은 7초를 초과하지 마라.
+                    4. 문장 단위 분할: 한 자막에는 최대 1~2문장만 포함하라.
+                    5. 시간 순서 보장: start는 반드시 이전 자막의 end보다 같거나 커야 한다.
+                    6. 시간 형식: 반드시 "MM:SS" 형식(예: 01:23)으로 통일하라. 소수점 사용 금지.
+                    7. 영상 끝까지 빠짐없이 추출하라.
+
+                    [특수문자 금지]
+                    - 텍스트 안에 따옴표(큰따옴표, 작은따옴표) 절대 금지. 인용구도 따옴표 없이 내용만 출력하라.
+                    - 텍스트 안에 줄바꿈(\\n) 사용 금지.
+                `;
+
+                const requestBody = {
+                    contents: [{ parts: [{ fileData: { fileUri: fileUri, mimeType: file.type } }, { text: promptText }] }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    start: { type: "STRING" },
+                                    end: { type: "STRING" },
+                                    text: { type: "STRING" }
+                                },
+                                required: ["start", "end", "text"]
+                            }
+                        }
+                    }
+                };
+
+                const generateResponse = await fetch(generateUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const generateData = await generateResponse.json();
+                if (generateData.error) throw new Error(`API 에러: ${generateData.error.message}`);
+
+                let rawText = generateData.candidates[0].content.parts[0].text;
+                let scripts;
+                try {
+                    scripts = JSON.parse(rawText);
+                } catch (parseError) {
+                    throw new Error("데이터 파싱 오류가 발생했습니다. 다시 시도해 주세요.");
+                }
+
+                srtProgress.style.width = '95%';
+
+                // SRT 파일 생성
+                function formatTimeForSrt(timeStr) {
+                    if (!timeStr) return "00:00:00,000";
+                    const cleanStr = timeStr.replace(/[^0-9:]/g, '');
+                    const parts = cleanStr.split(':');
+                    let h = 0, m = 0, s = 0;
+                    if (parts.length === 3) { h = parseInt(parts[0], 10) || 0; m = parseInt(parts[1], 10) || 0; s = parseInt(parts[2], 10) || 0; }
+                    else if (parts.length === 2) { m = parseInt(parts[0], 10) || 0; s = parseInt(parts[1], 10) || 0; }
+                    else { s = parseInt(parts[0], 10) || 0; }
+                    const pad = (num) => String(num).padStart(2, '0');
+                    return `${pad(h)}:${pad(m)}:${pad(s)},000`;
+                }
+
+                let srtContent = '';
+                let srtIndex = 1;
+                scripts.forEach(item => {
+                    if (item.text && item.text.trim()) {
+                        srtContent += `${srtIndex}\n`;
+                        srtContent += `${formatTimeForSrt(item.start)} --> ${formatTimeForSrt(item.end)}\n`;
+                        srtContent += `${item.text.trim()}\n\n`;
+                        srtIndex++;
+                    }
+                });
+
+                // 다운로드
+                const blob = new Blob([srtContent], { type: 'text/srt;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const downloadLink = document.createElement('a');
+                downloadLink.href = url;
+                downloadLink.download = 'original_subtitles.srt';
+                downloadLink.style.display = 'none';
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+                URL.revokeObjectURL(url);
+
+                srtProgress.style.width = '100%';
+                srtStatus.innerText = `✅ 원문 자막 SRT 다운로드 완료! (${srtIndex - 1}개 자막)`;
+
+            } catch (error) {
+                console.error(error);
+                srtStatus.innerText = `❌ 오류: ${error.message}`;
+            } finally {
+                document.getElementById('extractOriginalSrtBtn').disabled = false;
+            }
+        });
+
+        // --- 6. 화자 라벨 관리 ---
+        let speakerLabelCounter = 0;
+
+        function addSpeakerLabel() {
+            speakerLabelCounter++;
+            const container = document.getElementById('speakerLabels');
+            const row = document.createElement('div');
+            row.className = 'speaker-label-row';
+            row.id = `speaker-label-${speakerLabelCounter}`;
+            row.innerHTML = `
+                <textarea class="label-text" placeholder="예: 이재명(대한민국 현 대통령)&#10;엔터로 줄바꿈 가능" data-field="text" rows="1"></textarea>
+                <span style="color:#71767b; font-size:12px;">자막</span>
+                <input type="number" class="label-range" placeholder="시작" min="1" data-field="from">
+                <span style="color:#71767b; font-size:12px;">~</span>
+                <input type="number" class="label-range" placeholder="끝" min="1" data-field="to">
+                <span style="color:#71767b; font-size:12px;">번</span>
+                <button class="row-action-btn delete" onclick="this.parentElement.remove()" style="padding:4px 8px;">✕</button>
+            `;
+            container.appendChild(row);
+        }
+
+        function getSpeakerLabels() {
+            const labels = [];
+            document.querySelectorAll('.speaker-label-row').forEach(row => {
+                const text = row.querySelector('[data-field="text"]').value.trim();
+                const from = parseInt(row.querySelector('[data-field="from"]').value) || 0;
+                const to = parseInt(row.querySelector('[data-field="to"]').value) || 0;
+                if (text && from > 0 && to >= from) {
+                    labels.push({ text, from, to });
+                }
+            });
+            return labels;
+        }
+
+        // --- 7. 드래그 앤 드롭 영상 업로드 ---
+        const dropZone = document.getElementById('dropZone');
+        const dragOverlay = document.getElementById('dragOverlay');
+        const videoFileInput = document.getElementById('videoFile');
+
+        // 드래그 진입 시 시각적 피드백 제공
+        dropZone.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            dragOverlay.style.display = 'block';
+            dropZone.style.position = 'relative';
+        });
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault(); // 브라우저 기본 동작(파일 열기) 방지
+        });
+
+        // 드래그가 영역을 벗어나면 오버레이 숨김
+        dropZone.addEventListener('dragleave', (e) => {
+            // 자식 요소 간 이동 시 떨림 방지
+            if (!dropZone.contains(e.relatedTarget)) {
+                dragOverlay.style.display = 'none';
+            }
+        });
+
+        // 파일 드롭 시 input에 파일을 설정하고 자동으로 인식
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dragOverlay.style.display = 'none';
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                // 비디오 파일인지 확인
+                if (file.type.startsWith('video/')) {
+                    // DataTransfer를 통해 input에 파일 설정
+                    const dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(file);
+                    videoFileInput.files = dataTransfer.files;
+                    alert(`✅ "${file.name}" 영상이 업로드되었습니다!\n\n이제 "1. 원문 및 번역본 추출하기" 버튼을 클릭하세요.`);
+                } else {
+                    alert('⚠️ 비디오 파일만 업로드 가능합니다. (MP4, WebM, MOV)');
+                }
+            }
+        });
+    </script>
+
+    <!-- 워터마크 기능 -->
+    <script>
+    // ── 워터마크 상태 ──────────────────────────────────────────────
+    // phase: 'hidden' → 'fadein' → 'hold' → 'fadeout' → 'hidden' → ...
+    let _wmImage = null;
+    const _wmSt = {
+        phase: 'hidden',
+        phaseStart: 0,      // 현재 phase 시작 시각 (ms)
+        phaseDur: 0,        // 현재 phase 지속 시간 (ms)
+        x: 0, y: 0, w: 0, h: 0,
+    };
+    let _wmUserScale = 1;      // 사용자 크기 배율 (1~10)
+    let _wmUserAlpha = 0.40;   // 사용자 불투명도 (0~1)
+    const WM_FADE_MS    = 1500;   // 페이드인/아웃 시간 1.5초
+    const WM_HOLD_MS    = () => 3000 + Math.random() * 2000;   // 유지 3~5초
+    const WM_HIDDEN_MS  = () => 12000 + Math.random() * 8000;  // 숨김 12~20초
+
+    function _wmNextPhase(canvas, now) {
+        switch (_wmSt.phase) {
+            case 'hidden': {
+                // 새 위치·크기 결정 후 페이드인 시작
+                const baseScale = 0.08 + Math.random() * 0.07;   // 기본: 캔버스 너비의 8~15%
+                _wmSt.w = Math.round(canvas.width * baseScale * _wmUserScale);
+                _wmSt.h = Math.round(_wmSt.w * (_wmImage.naturalHeight / _wmImage.naturalWidth));
+                const margin = canvas.width * 0.05;
+                _wmSt.x = margin + Math.random() * (canvas.width  - _wmSt.w - margin * 2);
+                _wmSt.y = margin + Math.random() * (canvas.height - _wmSt.h - margin * 2);
+                _wmSt.phase = 'fadein';
+                _wmSt.phaseDur = WM_FADE_MS;
+                break;
+            }
+            case 'fadein':
+                _wmSt.phase = 'hold';
+                _wmSt.phaseDur = WM_HOLD_MS();
+                break;
+            case 'hold':
+                _wmSt.phase = 'fadeout';
+                _wmSt.phaseDur = WM_FADE_MS;
+                break;
+            case 'fadeout':
+                _wmSt.phase = 'hidden';
+                _wmSt.phaseDur = WM_HIDDEN_MS();
+                break;
+        }
+        _wmSt.phaseStart = now;
+    }
+
+    // ── 슬라이더 핸들러 ──────────────────────────────────────────────
+    document.getElementById('wmScaleRange').addEventListener('input', function () {
+        _wmUserScale = parseFloat(this.value);
+        document.getElementById('wmScaleValue').textContent = 'x' + this.value;
+    });
+    document.getElementById('wmAlphaRange').addEventListener('input', function () {
+        _wmUserAlpha = parseInt(this.value) / 100;
+        document.getElementById('wmAlphaValue').textContent = this.value + '%';
+    });
+
+    // ── 업로드 핸들러 ──────────────────────────────────────────────
+    document.getElementById('wmImageInput').addEventListener('change', function () {
+        const file = this.files[0];
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+            _wmImage = img;
+            _wmSt.phase = 'hidden';
+            _wmSt.phaseStart = 0;
+            _wmSt.phaseDur = 0;   // 첫 등장까지 대기 없이 바로 시작
+
+            document.getElementById('wmThumb').src = url;
+            document.getElementById('wmPreview').style.display = 'flex';
+            document.getElementById('wmControls').style.display = 'block';
+            document.getElementById('wmClearBtn').style.display = 'inline-block';
+        };
+        img.src = url;
+    });
+
+    function _wmClear() {
+        _wmImage = null;
+        document.getElementById('wmImageInput').value = '';
+        document.getElementById('wmPreview').style.display = 'none';
+        document.getElementById('wmControls').style.display = 'none';
+        document.getElementById('wmClearBtn').style.display = 'none';
+        document.getElementById('wmThumb').src = '';
+    }
+
+    // ── 프레임마다 호출되는 워터마크 렌더 함수 ────────────────────
+    function _wmRender(ctx, canvas) {
+        if (!_wmImage) return;
+
+        const now = Date.now();
+        const elapsed = now - _wmSt.phaseStart;
+
+        // phase 전환 시점 체크
+        if (elapsed >= _wmSt.phaseDur) {
+            _wmNextPhase(canvas, now);
+        }
+
+        // 현재 alpha 계산
+        let alpha = 0;
+        const t = Math.min(1, (now - _wmSt.phaseStart) / _wmSt.phaseDur || 0);
+        if      (_wmSt.phase === 'fadein')   alpha = _wmUserAlpha * t;
+        else if (_wmSt.phase === 'hold')     alpha = _wmUserAlpha;
+        else if (_wmSt.phase === 'fadeout')  alpha = _wmUserAlpha * (1 - t);
+        // 'hidden' → alpha 0, 그리지 않음
+
+        if (alpha > 0) {
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.drawImage(_wmImage, _wmSt.x, _wmSt.y, _wmSt.w, _wmSt.h);
+            ctx.restore();
+        }
+    }
+    </script>
+
+    <!-- 엔드스크린 기능 -->
+    <script>
+    // ── 엔드스크린 UI 토글 ──
+    document.getElementById('useEndScreen').addEventListener('change', function () {
+        document.getElementById('endScreenOptions').style.display = this.checked ? 'block' : 'none';
+    });
+
+    // ── 로고 이미지 로드 ──
+    let _endScreenLogo = null;
+    document.getElementById('endScreenLogo').addEventListener('change', function () {
+        const file = this.files[0];
+        if (!file) { _endScreenLogo = null; return; }
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => { _endScreenLogo = img; };
+        img.src = url;
+    });
+
+    // ── 엔드스크린 프레임 렌더 함수 ──
+    // frameT: 0~1 (엔드스크린 진행도), canvas, ctx 전달
+    function drawEndScreenFrame(ctx, canvas, frameT, opts) {
+        const W = canvas.width;
+        const H = canvas.height;
+        const now = Date.now() / 1000;
+        const style = opts.style || 'cinematic';
+
+        // ── 공통 easing ──
+        const easeOut = t => 1 - Math.pow(1 - t, 3);
+        const easeInOut = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        const introT = Math.min(1, frameT * 4);    // 처음 25%에서 인트로 완료
+        const outroT = Math.max(0, (frameT - 0.8) / 0.2); // 마지막 20%에서 아웃트로
+
+        // ── 스타일별 색상 팔레트 ──
+        const palettes = {
+            cinematic: { bg1: '#0a0a0a', bg2: '#1a1a2e', accent: '#e2b857', text: '#ffffff', sub: '#aaaaaa', particle: '#e2b857' },
+            neon:      { bg1: '#0d0221', bg2: '#150734', accent: '#bf00ff', text: '#ffffff', sub: '#c084fc', particle: '#7c3aed' },
+            golden:    { bg1: '#1a1000', bg2: '#2d1f00', accent: '#ffd700', text: '#ffffff', sub: '#fbbf24', particle: '#ffd700' },
+            minimal:   { bg1: '#ffffff', bg2: '#f0f0f0', accent: '#000000', text: '#000000', sub: '#555555', particle: '#cccccc' }
+        };
+        const pal = palettes[style] || palettes.cinematic;
+
+        ctx.save();
+
+        // ── 1) 배경 ──
+        const fadeIn = easeOut(introT);
+        ctx.globalAlpha = fadeIn;
+
+        const bgGrad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W * 0.8);
+        bgGrad.addColorStop(0, pal.bg2);
+        bgGrad.addColorStop(1, pal.bg1);
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, W, H);
+
+        // ── 2) 파티클 (떠다니는 빛 입자) ──
+        const particleCount = 40;
+        for (let i = 0; i < particleCount; i++) {
+            const seed = i * 137.508;
+            const px = (W * ((seed * 0.3) % 1) + Math.sin(now * 0.3 + seed) * W * 0.05) % W;
+            const py = (H * ((seed * 0.7) % 1) + Math.cos(now * 0.2 + seed) * H * 0.05) % H;
+            const pr = 1 + Math.sin(now * 2 + seed) * 0.8;
+            const pa = 0.15 + 0.15 * Math.sin(now * 1.5 + seed);
+
+            const pGrad = ctx.createRadialGradient(px, py, 0, px, py, pr * 4);
+            pGrad.addColorStop(0, pal.particle + Math.round(pa * 255).toString(16).padStart(2, '0'));
+            pGrad.addColorStop(1, pal.particle + '00');
+            ctx.fillStyle = pGrad;
+            ctx.beginPath();
+            ctx.arc(px, py, pr * 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // ── 3) 중앙 장식 라인 (위아래) ──
+        const lineW = W * 0.35 * easeOut(Math.min(1, introT * 1.5));
+        const lineY1 = H * 0.38;
+        const lineY2 = H * 0.62;
+
+        ctx.strokeStyle = pal.accent;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = fadeIn * 0.7;
+        ctx.beginPath();
+        ctx.moveTo(W / 2 - lineW / 2, lineY1);
+        ctx.lineTo(W / 2 + lineW / 2, lineY1);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(W / 2 - lineW / 2, lineY2);
+        ctx.lineTo(W / 2 + lineW / 2, lineY2);
+        ctx.stroke();
+        ctx.globalAlpha = fadeIn;
+
+        // ── 4) 로고 이미지 (있으면 중앙 상단) ──
+        if (_endScreenLogo) {
+            const logoMaxH = H * 0.12;
+            const logoScale = logoMaxH / _endScreenLogo.naturalHeight;
+            const logoW = _endScreenLogo.naturalWidth * logoScale;
+            const logoH = logoMaxH;
+            const logoY = H * 0.18 - logoH / 2;
+
+            // 로고 글로우
+            ctx.shadowColor = pal.accent;
+            ctx.shadowBlur = 20 + Math.sin(now * 2) * 8;
+            ctx.drawImage(_endScreenLogo, W / 2 - logoW / 2, logoY * easeOut(introT) + (1 - easeOut(introT)) * (logoY - 30), logoW, logoH);
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+        }
+
+        // ── 5) 메인 타이틀 텍스트 ──
+        if (opts.title) {
+            const titleSize = Math.floor(H * 0.065);
+            ctx.font = `800 ${titleSize}px "Pretendard", "Malgun Gothic", sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            // 슬라이드 업 + 페이드 인
+            const titleIntro = easeOut(Math.min(1, Math.max(0, introT * 2 - 0.3)));
+            const titleY = H * 0.47 + (1 - titleIntro) * 25;
+            ctx.globalAlpha = fadeIn * titleIntro * (1 - easeInOut(outroT));
+
+            // 텍스트 글로우
+            ctx.shadowColor = pal.accent;
+            ctx.shadowBlur = 15 + Math.sin(now * 2.5) * 5;
+
+            // 텍스트 그라디언트
+            const tGrad = ctx.createLinearGradient(W * 0.3, titleY - titleSize / 2, W * 0.7, titleY + titleSize / 2);
+            tGrad.addColorStop(0, pal.text);
+            tGrad.addColorStop(0.5, pal.accent);
+            tGrad.addColorStop(1, pal.text);
+            ctx.fillStyle = tGrad;
+            ctx.fillText(opts.title, W / 2, titleY);
+
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+        }
+
+        // ── 6) 서브타이틀 / CTA ──
+        if (opts.subtitle) {
+            const subSize = Math.floor(H * 0.032);
+            ctx.font = `500 ${subSize}px "Pretendard", "Malgun Gothic", sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            const subIntro = easeOut(Math.min(1, Math.max(0, introT * 2 - 0.6)));
+            const subY = H * 0.55 + (1 - subIntro) * 15;
+            ctx.globalAlpha = fadeIn * subIntro * 0.85 * (1 - easeInOut(outroT));
+            ctx.fillStyle = pal.sub;
+            ctx.fillText(opts.subtitle, W / 2, subY);
+        }
+
+        // ── 7) 하단 장식 도트 애니메이션 ──
+        const dotCount = 5;
+        const dotY = H * 0.72;
+        const dotSpacing = W * 0.025;
+        const dotBaseX = W / 2 - (dotCount - 1) * dotSpacing / 2;
+        for (let i = 0; i < dotCount; i++) {
+            const dotDelay = i * 0.15;
+            const dotPulse = Math.sin(now * 3 - dotDelay * 5);
+            const dotR = 2 + dotPulse * 1.2;
+            const dotAlpha = 0.4 + dotPulse * 0.3;
+            ctx.globalAlpha = fadeIn * dotAlpha * (1 - easeInOut(outroT));
+            ctx.fillStyle = pal.accent;
+            ctx.beginPath();
+            ctx.arc(dotBaseX + i * dotSpacing, dotY, Math.max(1, dotR), 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // ── 8) 비네트 오버레이 ──
+        ctx.globalAlpha = 0.4;
+        const vignette = ctx.createRadialGradient(W / 2, H / 2, W * 0.25, W / 2, H / 2, W * 0.75);
+        vignette.addColorStop(0, 'rgba(0,0,0,0)');
+        vignette.addColorStop(1, 'rgba(0,0,0,0.6)');
+        ctx.fillStyle = vignette;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.restore();
+    }
+    </script>
+
+    <!-- FFmpeg.wasm: H.264 MP4 직접 녹화 불가능한 브라우저 환경을 위한 폴백 변환기 -->
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/util.js"></script>
+
+    <script>
+    // X.com 호환 MP4 변환 함수 (WebM → H.264+AAC MP4, FFmpeg.wasm 사용)
+    async function _transcodeToXCompatMP4(inputBlob, statusEl) {
+        const FFmpegLib = window.FFmpegWASM;
+        const FFmpegUtilLib = window.FFmpegUtil;
+        if (!FFmpegLib || !FFmpegUtilLib) {
+            throw new Error('FFmpeg 라이브러리가 로드되지 않았습니다. 인터넷 연결을 확인해주세요.');
+        }
+        const { FFmpeg } = FFmpegLib;
+        const { fetchFile } = FFmpegUtilLib;
+
+        const ffmpeg = new FFmpeg();
+        ffmpeg.on('progress', ({ progress }) => {
+            if (statusEl) {
+                const pct = Math.min(100, Math.round(progress * 100));
+                statusEl.innerText = `🔄 X.com 호환 MP4로 변환 중... ${pct}%`;
+            }
+        });
+
+        if (statusEl) statusEl.innerText = '🔄 FFmpeg 로딩 중... (최초 1회, 약 10~30초 소요)';
+        await ffmpeg.load({
+            coreURL: 'https://unpkg.com/@ffmpeg/core-st@0.12.6/dist/umd/ffmpeg-core.js',
+            wasmURL: 'https://unpkg.com/@ffmpeg/core-st@0.12.6/dist/umd/ffmpeg-core.wasm',
+        });
+        if (statusEl) statusEl.innerText = '🔄 X.com 호환 MP4로 변환 중... 0%';
+
+        await ffmpeg.writeFile('input.webm', await fetchFile(inputBlob));
+        await ffmpeg.exec([
+            '-i', 'input.webm',
+            '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+            '-r', '30',                                          // 비디오 30fps CFR 강제 (setTimeout 불균일 보정)
+            '-c:a', 'aac', '-b:a', '128k',
+            '-af', 'aresample=async=1:min_hard_comp=0.100:first_pts=0', // 오디오-비디오 싱크 자동 보정
+            '-movflags', '+faststart',  // 웹 스트리밍 최적화
+            'output.mp4'
+        ]);
+        const data = await ffmpeg.readFile('output.mp4');
+        ffmpeg.terminate();
+        return new Blob([data.buffer], { type: 'video/mp4' });
+    }
+    </script>
+</body>
+</html>

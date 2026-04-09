@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>X.com 통합 툴 (에디터 & 자막번역)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            font-family: 'Pretendard', 'Noto Sans KR', sans-serif;
+            background-color: #1e1e2f;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 탭 헤더 스타일링 (모던한 다크 테마) */
+        .tab-header {
+            display: flex;
+            background-color: #0f1419;
+            padding: 0 20px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            border-bottom: 2px solid #2f3336;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: #71767b;
+            font-size: 15px;
+            font-weight: 600;
+            padding: 16px 24px;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            position: relative;
+        }
+
+        .tab-btn:hover {
+            color: #e7e9ea;
+            background-color: rgba(255, 255, 255, 0.03);
+        }
+
+        .tab-btn.active {
+            color: #eff3f4;
+        }
+
+        /* 탭 활성화 시 하단 인디케이터 (X.com 스타일) */
+        .tab-btn::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 4px;
+            background-color: #1d9bf0;
+            border-radius: 4px 4px 0 0;
+            transition: width 0.2s ease-in-out;
+        }
+
+        .tab-btn.active::after {
+            width: 80%;
+        }
+
+        /* iframe 영역 */
+        .iframe-container {
+            flex: 1;
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background-color: #15202b;
+        }
+
+        iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease-in-out;
+            z-index: 1;
+        }
+
+        iframe.active {
+            opacity: 1;
+            visibility: visible;
+            z-index: 10;
+        }
+
+        /* 탭 내 아이콘 스타일 */
+        .tab-icon {
+            margin-right: 6px;
+            font-size: 1.1em;
+            vertical-align: middle;
+        }
+
+        /* 로딩 인디케이터 */
+        .iframe-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #71767b;
+            font-size: 15px;
+            z-index: 5;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .iframe-loading .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid #38444d;
+            border-top-color: #1d9bf0;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 모바일 반응형 */
+        @media (max-width: 600px) {
+            .tab-btn {
+                font-size: 13px;
+                padding: 12px 14px;
+            }
+            .tab-icon { display: none; }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="tab-header">
+        <button class="tab-btn active" onclick="switchTab('meme', event)">
+            <span class="tab-icon">🖼️</span>AI 댓글/밈 에디터
+        </button>
+        <button class="tab-btn" onclick="switchTab('subtitles', event)">
+            <span class="tab-icon">📝</span>자막 번역기
+        </button>
+    </div>
+
+    <div class="iframe-container">
+        <div class="iframe-loading" id="iframeLoading">
+            <div class="spinner"></div>
+            <span>로딩 중...</span>
+        </div>
+
+        <!-- meme.html은 즉시 로딩 -->
+        <iframe id="iframe-meme" src="meme.html" class="active" allow="popups popups-to-escape-sandbox"></iframe>
+
+        <!-- 자막번역.html은 탭 클릭 시 지연 로딩 -->
+        <iframe id="iframe-subtitles" allow="popups popups-to-escape-sandbox"></iframe>
+    </div>
+
+    <script>
+        const iframeSrcMap = {
+            meme: 'meme.html',
+            subtitles: 'subtitle.html'
+        };
+
+        function switchTab(tabId, e) {
+            // 버튼들 초기화 및 클릭된 버튼 활성화
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            e.currentTarget.classList.add('active');
+
+            // iframe들 초기화 및 해당 iframe 활성화
+            document.querySelectorAll('iframe').forEach(iframe => iframe.classList.remove('active'));
+            const targetIframe = document.getElementById('iframe-' + tabId);
+
+            // 지연 로딩: src가 없으면 최초 로딩
+            if (!targetIframe.src || targetIframe.getAttribute('src') === '') {
+                document.getElementById('iframeLoading').style.display = 'flex';
+                targetIframe.src = iframeSrcMap[tabId];
+            }
+
+            targetIframe.classList.add('active');
+
+            // URL 해시 라우팅
+            window.location.hash = tabId;
+        }
+
+        // iframe 로드 완료 시 로딩 인디케이터 숨김
+        document.querySelectorAll('iframe').forEach(iframe => {
+            iframe.addEventListener('load', () => {
+                document.getElementById('iframeLoading').style.display = 'none';
+            });
+        });
+
+        // 페이지 로드 시 해시 기반 탭 복원
+        window.addEventListener('DOMContentLoaded', () => {
+            const hash = window.location.hash.substring(1);
+            if (hash === 'subtitles') {
+                const btn = document.querySelectorAll('.tab-btn')[1];
+                switchTab('subtitles', { currentTarget: btn });
+            }
+        });
+    </script>
+
+</body>
+
+</html>
