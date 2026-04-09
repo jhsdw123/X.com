@@ -216,9 +216,12 @@
 
                 <!-- 화자 라벨 섹션 -->
                 <div class="speaker-label-section" id="speakerLabelSection">
-                    <div class="section-title">🏷️ 화자 라벨 (좌측 상단에 표시 — 선택 사항)</div>
+                    <div class="section-title">🏷️ 화자 라벨 (좌측 상단에 표시 — 선택 사항, 일본어 라벨 입력 시 4초 간격 교대 표시)</div>
                     <div id="speakerLabels"></div>
-                    <button type="button" onclick="addSpeakerLabel()" style="padding: 6px 14px; font-size: 13px; background: #1d9bf0; margin-top: 6px;">+ 라벨 추가</button>
+                    <div style="display:flex; gap:8px; margin-top:6px;">
+                        <button type="button" onclick="addSpeakerLabel()" style="padding: 6px 14px; font-size: 13px; background: #1d9bf0; border:none; border-radius:4px; color:white; cursor:pointer;">+ 라벨 추가</button>
+                        <button type="button" id="translateAllLabelsBtn" style="padding: 6px 14px; font-size: 13px; background: #ef4444; border:none; border-radius:4px; color:white; cursor:pointer;">🇯🇵 전체 라벨 일본어 번역</button>
+                    </div>
                 </div>
 
                 <!-- 엔드스크린 설정 -->
@@ -1493,7 +1496,7 @@ ${allTranslations.join(' ')}`;
                         }
                     }
 
-                    // ── 화자 라벨 렌더링 ──
+                    // ── 화자 라벨 렌더링 (한글↔일본어 4초 교대) ──
                     const speakerLabelsData = getSpeakerLabels();
                     const currentSubIndex = subs.indexOf(currentSub);
                     for (const label of speakerLabelsData) {
@@ -1501,8 +1504,28 @@ ${allTranslations.join(' ')}`;
                         const fromIdx = label.from - 1;
                         const toIdx = label.to - 1;
                         if (currentSubIndex >= fromIdx && currentSubIndex <= toIdx) {
+                            // 4초 간격으로 한글/일본어 교대 (일본어 라벨이 있을 때만)
+                            const hasJpLabel = label.textJp && label.textJp.trim() !== '';
+                            const cycleSec = 4;
+                            const cyclePhase = Math.floor(currentTime / cycleSec) % 2; // 0=한글, 1=일본어
+                            const cycleProgress = (currentTime % cycleSec) / cycleSec; // 0~1 진행도
+                            const showJp = hasJpLabel && cyclePhase === 1;
+                            const displayText = showJp ? label.textJp : label.text;
+
+                            // 전환 시 페이드 효과 (전환 전후 0.3초)
+                            const fadeZone = 0.3 / cycleSec; // 0~1 기준 페이드 구간
+                            let labelAlpha = 1.0;
+                            if (hasJpLabel) {
+                                if (cycleProgress < fadeZone) {
+                                    labelAlpha = cycleProgress / fadeZone; // 페이드 인
+                                } else if (cycleProgress > 1 - fadeZone) {
+                                    labelAlpha = (1 - cycleProgress) / fadeZone; // 페이드 아웃
+                                }
+                            }
+
                             const labelFontSize = Math.floor(canvas.height * 0.028);
                             ctx.save();
+                            ctx.globalAlpha = labelAlpha;
                             ctx.font = `600 ${labelFontSize}px "Pretendard", "Malgun Gothic", sans-serif`;
                             ctx.textAlign = 'left';
                             ctx.textBaseline = 'top';
@@ -1515,7 +1538,7 @@ ${allTranslations.join(' ')}`;
                             const maxLabelWidth = canvas.width * 0.9 - lx * 2;
 
                             // 사용자 줄바꿈(\n) + 캔버스 초과 시 자동 줄바꿈
-                            const rawLines = label.text.split('\n');
+                            const rawLines = displayText.split('\n');
                             const lines = [];
                             for (const rawLine of rawLines) {
                                 const words = rawLine.split('');
@@ -2203,6 +2226,7 @@ ${allTranslations.join(' ')}`;
             const row = document.createElement('div');
             row.className = 'speaker-label-row';
             row.id = `speaker-label-${speakerLabelCounter}`;
+            row.style.flexWrap = 'wrap';
             row.innerHTML = `
                 <textarea class="label-text" placeholder="예: 이재명(대한민국 현 대통령)&#10;엔터로 줄바꿈 가능" data-field="text" rows="1"></textarea>
                 <span style="color:#71767b; font-size:12px;">자막</span>
@@ -2211,22 +2235,93 @@ ${allTranslations.join(' ')}`;
                 <input type="number" class="label-range" placeholder="끝" min="1" data-field="to">
                 <span style="color:#71767b; font-size:12px;">번</span>
                 <button class="row-action-btn delete" onclick="this.parentElement.remove()" style="padding:4px 8px;">✕</button>
+                <div style="width:100%; display:flex; gap:8px; align-items:center; margin-top:4px;">
+                    <textarea class="label-text-jp" placeholder="🇯🇵 일본어 라벨 (자동 번역 또는 직접 입력)" data-field="textJp" rows="1" style="flex:1; min-width:150px; padding:6px 8px; border:1px solid #ef4444; border-radius:4px; background:#1e2732; color:#f0e6d3; font-size:13px; resize:vertical; min-height:30px; height:30px; font-family:inherit; line-height:1.4;"></textarea>
+                    <button type="button" class="translate-label-btn" style="padding:4px 10px; font-size:11px; background:#ef4444; color:white; border:none; border-radius:4px; cursor:pointer; white-space:nowrap;">🇯🇵 번역</button>
+                </div>
             `;
+            // 개별 라벨 번역 버튼
+            row.querySelector('.translate-label-btn').addEventListener('click', async function() {
+                const koText = row.querySelector('[data-field="text"]').value.trim();
+                if (!koText) { alert('한국어 라벨을 먼저 입력하세요.'); return; }
+                const jpField = row.querySelector('[data-field="textJp"]');
+                this.disabled = true;
+                this.innerText = '번역중...';
+                try {
+                    jpField.value = await translateLabelToJapanese(koText);
+                } catch(e) {
+                    console.error(e);
+                    jpField.value = '';
+                    alert('번역 실패: ' + e.message);
+                }
+                this.disabled = false;
+                this.innerText = '🇯🇵 번역';
+            });
             container.appendChild(row);
+        }
+
+        // 화자 라벨 일본어 번역 (사람 이름 유지)
+        async function translateLabelToJapanese(koText) {
+            const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
+            const prompt = `Translate the following speaker label text into Japanese.
+[CRITICAL RULES]
+1. Keep all person names exactly as they are (do NOT translate names). For example: 이재명, Trump, 김정은 — keep them unchanged.
+2. Translate only the descriptive/title parts into natural Japanese. For example: "대한민국 현 대통령" → "韓国現大統領", "미국 국무장관" → "アメリカ国務長官"
+3. If the text is only a person name with no description, return it unchanged.
+4. Maintain the same line break structure (\\n) as the original.
+5. No quotation marks. Output ONLY the translated text.
+
+Input: ${koText}`;
+
+            const response = await fetch(generateUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: { type: "OBJECT", properties: { translated: { type: "STRING" } }, required: ["translated"] }
+                    }
+                })
+            });
+            const data = await response.json();
+            if (data.error) throw new Error(data.error.message);
+            const result = JSON.parse(data.candidates[0].content.parts[0].text);
+            return result.translated;
         }
 
         function getSpeakerLabels() {
             const labels = [];
             document.querySelectorAll('.speaker-label-row').forEach(row => {
                 const text = row.querySelector('[data-field="text"]').value.trim();
+                const textJp = row.querySelector('[data-field="textJp"]') ? row.querySelector('[data-field="textJp"]').value.trim() : '';
                 const from = parseInt(row.querySelector('[data-field="from"]').value) || 0;
                 const to = parseInt(row.querySelector('[data-field="to"]').value) || 0;
                 if (text && from > 0 && to >= from) {
-                    labels.push({ text, from, to });
+                    labels.push({ text, textJp, from, to });
                 }
             });
             return labels;
         }
+
+        // --- 6-B. 전체 라벨 일괄 일본어 번역 ---
+        document.getElementById('translateAllLabelsBtn').addEventListener('click', async function() {
+            const rows = document.querySelectorAll('.speaker-label-row');
+            if (rows.length === 0) { alert('라벨을 먼저 추가하세요.'); return; }
+            this.disabled = true;
+            this.innerText = '번역 중...';
+            for (const row of rows) {
+                const koText = row.querySelector('[data-field="text"]').value.trim();
+                const jpField = row.querySelector('[data-field="textJp"]');
+                if (!koText || !jpField) continue;
+                if (jpField.value.trim()) continue; // 이미 번역된 건 건너뜀
+                try {
+                    jpField.value = await translateLabelToJapanese(koText);
+                } catch(e) { console.error(e); }
+            }
+            this.disabled = false;
+            this.innerText = '🇯🇵 전체 라벨 일본어 번역';
+        });
 
         // --- 7. 드래그 앤 드롭 영상 업로드 ---
         const dropZone = document.getElementById('dropZone');
