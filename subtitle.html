@@ -18,8 +18,6 @@
         .panel { background: #1e2732; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); border: 1px solid #38444d; }
         .panel-title { font-size: 16px; font-weight: bold; margin-bottom: 15px; color: #e7e9ea; border-bottom: 2px solid #4CAF50; padding-bottom: 5px; }
 
-        .suggestion-box { background-color: #253341; border: 1px solid #38444d; border-radius: 6px; padding: 12px; margin-bottom: 10px; cursor: pointer; transition: 0.2s; font-size: 14px; line-height: 1.4; color: #e7e9ea; }
-        .suggestion-box:hover { background-color: #2c3e50; border-color: #1d9bf0; transform: translateY(-2px); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
 
         .script-row { display: flex; gap: 15px; margin-bottom: 20px; align-items: flex-start; border-bottom: 1px solid #38444d; padding-bottom: 15px; }
         .time-box { flex: 0 0 90px; display: flex; flex-direction: column; gap: 4px; }
@@ -332,20 +330,51 @@
             </div>
 
             <div class="panel">
-                <div class="panel-title">✨ AI 번역 대안 제안</div>
-                <div id="panelLoading">더 자연스러운 표현을 찾는 중... ⏳</div>
-                <div id="suggestionResults"><p style="font-size: 12px; color: #71767b; margin-bottom: 10px;">좌측 번역본에서 마음에 안 드는 부분을 마우스로 드래그(블록 지정) 하세요.</p></div>
+                <div class="panel-title">📌 영상 키포인트 요약</div>
+                <button id="generateSummaryBtn" style="padding: 10px 16px; background-color: #1d9bf0; color: white; border: none; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; width: 100%; transition: 0.2s;">자막 기반 키포인트 요약하기</button>
+                <div id="summaryLoading" style="display: none; color: #1d9bf0; font-weight: bold; padding: 10px; text-align: center; margin-top: 10px;">영상의 핵심을 분석하는 중... ⏳</div>
+                <div id="summaryResult" style="margin-top: 12px;"><p style="font-size: 12px; color: #71767b;">자막 추출 후 버튼을 눌러 영상의 핵심 내용을 요약하세요.</p></div>
             </div>
 
         </div>
     </div>
 
     <script>
-        const API_KEY = 'AIzaSyDZpXmUjOSC78hh27nvH2IVp8fK4hO7Kyo'; 
+        const API_KEY = 'AIzaSyDeCwcu8wzVMQoocwTatMzGVla8dPJvyKM'; 
         const TTS_API_KEY = 'AIzaSyBrblN5JgbtMrys4x6wAEuF3ih0JuyAg2M';
         const MODEL_NAME = 'gemini-flash-latest';
 
         let originalVideoFile = null;
+        let lastUploadedFileName = null;
+
+        // 영상 파일이 변경되면 이전 작업 초기화
+        document.getElementById('videoFile').addEventListener('change', function() {
+            const file = this.files[0];
+            if (!file) return;
+
+            // 같은 파일이면 무시
+            if (lastUploadedFileName && lastUploadedFileName === file.name + '_' + file.size + '_' + file.lastModified) return;
+
+            // 이전 자막이 있으면 초기화 확인
+            const rows = document.querySelectorAll('.script-row');
+            if (rows.length > 0) {
+                if (!confirm(`새 영상 "${file.name}"을(를) 선택했습니다.\n기존 자막을 초기화하고 새 영상으로 작업하시겠습니까?`)) {
+                    // 취소 시 이전 파일로 복원
+                    return;
+                }
+                // 에디터 초기화
+                document.getElementById('editorArea').innerHTML = '';
+                document.getElementById('renderOptions').style.display = 'none';
+                document.getElementById('exportJpSrtBtn').style.display = 'none';
+
+                // 요약 패널 초기화
+                const summaryResult = document.getElementById('summaryResult');
+                if (summaryResult) summaryResult.innerHTML = '<p style="font-size: 12px; color: #71767b;">자막 추출 후 버튼을 눌러 영상의 핵심 내용을 요약하세요.</p>';
+            }
+
+            originalVideoFile = file;
+            lastUploadedFileName = file.name + '_' + file.size + '_' + file.lastModified;
+        });
 
         // ─────────────────────────────────────────────────
         // 자막 시간 처리 헬퍼 함수
@@ -389,7 +418,7 @@
                 // 한국어/영어 문장 경계로 번역 텍스트 분할 시도
                 // (~습니다. ~합니다. ~겠습니다. + . ! ?)
                 const sentences = item.translation
-                    .split(/(?<=[.!?])\s+|(?<=습니다\.)\s*|(?<=합니다\.)\s*|(?<=겠습니다\.)\s*/)
+                    .split(/(?<=[.!?])(?<!\.\.)(?!\.)(?:\s+)|(?<=습니다\.)(?!\.)(?:\s*)|(?<=합니다\.)(?!\.)(?:\s*)|(?<=겠습니다\.)(?!\.)(?:\s*)/)
                     .map(s => s.trim())
                     .filter(s => s.length > 0);
 
@@ -572,6 +601,7 @@
 
             if (!file) { alert('동영상 파일을 선택해 주세요!'); return; }
             originalVideoFile = file;
+            lastUploadedFileName = file.name + '_' + file.size + '_' + file.lastModified;
 
             loading.style.display = 'block';
             progressBar.style.width = '0%';
@@ -759,56 +789,129 @@
                         originals.push({ index: i, text: row.querySelector('.original-text').value.trim() });
                     });
 
-                    jpStatus.innerText = 'AI에게 일본어 번역을 요청하는 중...';
-                    jpProgress.style.width = '40%';
+                    // 배치 단위로 분할하여 누락 방지 (한 번에 최대 30개씩)
+                    const BATCH_SIZE = 30;
+                    const allJpResults = [];
 
-                    const jpPrompt = `
-                        아래 JSON 배열의 각 항목에 있는 원문 텍스트를 일본어로 번역해 줘.
-                        각 항목의 index는 그대로 유지하고, japanese 필드에 일본어 번역을 넣어라.
-                        [번역 톤] ${selectedJpTone}
-                        [절대 규칙]
-                        1. 따옴표 절대 사용 금지.
-                        2. 줄바꿈(\\n) 절대 금지.
-                        3. index 순서와 개수를 원본과 정확히 일치시켜라.
-                        원문 데이터: ${JSON.stringify(originals)}
-                    `;
+                    for (let batchStart = 0; batchStart < originals.length; batchStart += BATCH_SIZE) {
+                        const batch = originals.slice(batchStart, batchStart + BATCH_SIZE);
+                        const batchNum = Math.floor(batchStart / BATCH_SIZE) + 1;
+                        const totalBatches = Math.ceil(originals.length / BATCH_SIZE);
+                        const progressPct = 15 + Math.round((batchStart / originals.length) * 65);
 
-                    const response = await fetch(generateUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            contents: [{ parts: [{ text: jpPrompt }] }],
-                            generationConfig: {
-                                responseMimeType: "application/json",
-                                responseSchema: { type: "ARRAY", items: { type: "OBJECT", properties: { index: { type: "INTEGER" }, japanese: { type: "STRING" } }, required: ["index", "japanese"] } }
-                            }
-                        })
-                    });
+                        jpStatus.innerText = `AI에게 일본어 번역을 요청하는 중... (${batchNum}/${totalBatches})`;
+                        jpProgress.style.width = `${progressPct}%`;
 
-                    const data = await response.json();
-                    if (data.error) throw new Error(`API 에러: ${data.error.message}`);
-                    const jpResults = JSON.parse(data.candidates[0].content.parts[0].text);
+                        const jpPrompt = `
+                            You are a professional Japanese translator.
+                            Translate each item's "text" field into Japanese and return it in the "japanese" field.
+                            [CRITICAL RULES]
+                            1. The output must contain ONLY Japanese characters (hiragana, katakana, kanji). Do NOT include any Korean (한국어), Chinese, or other non-Japanese text.
+                            2. No quotation marks of any kind.
+                            3. No line breaks (\\n).
+                            4. You MUST return exactly ${batch.length} items. Every index from the input must appear in the output. Do NOT skip any item.
+                            5. Keep each index exactly as given.
+                            [Translation tone] ${selectedJpTone}
+                            Input data: ${JSON.stringify(batch)}
+                        `;
 
-                    jpProgress.style.width = '85%';
-                    jpStatus.innerText = '일본어 자막을 적용하는 중...';
+                        const response = await fetch(generateUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: [{ parts: [{ text: jpPrompt }] }],
+                                generationConfig: {
+                                    responseMimeType: "application/json",
+                                    responseSchema: { type: "ARRAY", items: { type: "OBJECT", properties: { index: { type: "INTEGER" }, japanese: { type: "STRING" } }, required: ["index", "japanese"] } }
+                                }
+                            })
+                        });
+
+                        const data = await response.json();
+                        if (data.error) throw new Error(`API 에러: ${data.error.message}`);
+                        const batchResults = JSON.parse(data.candidates[0].content.parts[0].text);
+                        allJpResults.push(...batchResults);
+                    }
+
+                    jpProgress.style.width = '82%';
+                    jpStatus.innerText = '일본어 자막을 검증하고 적용하는 중...';
+
+                    // 한국어 문자 혼입 제거 후처리
+                    function removeKorean(text) {
+                        return text.replace(/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\uA960-\uA97F\uD7B0-\uD7FF]/g, '').replace(/\s{2,}/g, ' ').trim();
+                    }
+
+                    // index 기반 맵 생성 (중복 방지)
+                    const jpMap = new Map();
+                    for (const jp of allJpResults) {
+                        jpMap.set(jp.index, jp.japanese || '');
+                    }
 
                     const allRows = document.querySelectorAll('.script-row');
-                    for (const jp of jpResults) {
-                        if (jp.index >= 0 && jp.index < allRows.length) {
-                            const row = allRows[jp.index];
-                            let jpInput = row.querySelector('.japanese-text');
-                            if (!jpInput) {
-                                jpInput = document.createElement('textarea');
-                                jpInput.className = 'text-input japanese-text';
-                                row.querySelector('.text-container').appendChild(jpInput);
-                            }
-                            jpInput.value = jp.japanese || '';
+
+                    // 누락된 항목 수집하여 재요청
+                    const missingIndices = [];
+                    for (let i = 0; i < allRows.length; i++) {
+                        if (!jpMap.has(i) || jpMap.get(i).trim() === '') {
+                            missingIndices.push({ index: i, text: allRows[i].querySelector('.original-text').value.trim() });
                         }
+                    }
+
+                    if (missingIndices.length > 0) {
+                        jpStatus.innerText = `누락된 ${missingIndices.length}개 자막을 재번역하는 중...`;
+                        jpProgress.style.width = '88%';
+
+                        const retryPrompt = `
+                            You are a professional Japanese translator.
+                            Translate each item's "text" field into Japanese and return it in the "japanese" field.
+                            [CRITICAL RULES]
+                            1. The output must contain ONLY Japanese characters (hiragana, katakana, kanji). Do NOT include any Korean, Chinese, or other non-Japanese text.
+                            2. No quotation marks. No line breaks (\\n).
+                            3. You MUST return exactly ${missingIndices.length} items. Do NOT skip any.
+                            [Translation tone] ${selectedJpTone}
+                            Input data: ${JSON.stringify(missingIndices)}
+                        `;
+
+                        const retryResponse = await fetch(generateUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: [{ parts: [{ text: retryPrompt }] }],
+                                generationConfig: {
+                                    responseMimeType: "application/json",
+                                    responseSchema: { type: "ARRAY", items: { type: "OBJECT", properties: { index: { type: "INTEGER" }, japanese: { type: "STRING" } }, required: ["index", "japanese"] } }
+                                }
+                            })
+                        });
+
+                        const retryData = await retryResponse.json();
+                        if (!retryData.error) {
+                            const retryResults = JSON.parse(retryData.candidates[0].content.parts[0].text);
+                            for (const rj of retryResults) {
+                                jpMap.set(rj.index, rj.japanese || '');
+                            }
+                        }
+                    }
+
+                    jpProgress.style.width = '92%';
+
+                    // 최종 적용 (한국어 혼입 제거 포함)
+                    for (let i = 0; i < allRows.length; i++) {
+                        const row = allRows[i];
+                        let jpInput = row.querySelector('.japanese-text');
+                        if (!jpInput) {
+                            jpInput = document.createElement('textarea');
+                            jpInput.className = 'text-input japanese-text';
+                            row.querySelector('.text-container').appendChild(jpInput);
+                        }
+                        const rawJp = jpMap.get(i) || '';
+                        jpInput.value = removeKorean(rawJp);
                     }
 
                 } else {
                     // ── 모드 B: 한국어 없음 → 영상 업로드 후 한국어+일본어 동시 추출 ──
                     originalVideoFile = file;
+                    lastUploadedFileName = file.name + '_' + file.size + '_' + file.lastModified;
 
                     jpStatus.innerText = '1/4: 영상을 서버에 업로드하는 중...';
                     jpProgress.style.width = '10%';
@@ -902,6 +1005,61 @@
                     scripts = splitLongSubtitles(scripts, 7);
                     scripts = fixSubtitleSync(scripts);
 
+                    // 한국어 문자 혼입 제거 후처리
+                    function removeKoreanB(text) {
+                        return text.replace(/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\uA960-\uA97F\uD7B0-\uD7FF]/g, '').replace(/\s{2,}/g, ' ').trim();
+                    }
+
+                    // 일본어가 누락된 항목 수집
+                    const missingJpItems = [];
+                    scripts.forEach((item, i) => {
+                        if (!item.japanese || item.japanese.trim() === '') {
+                            missingJpItems.push({ index: i, text: item.original });
+                        } else {
+                            item.japanese = removeKoreanB(item.japanese);
+                        }
+                    });
+
+                    // 누락된 항목이 있으면 재요청
+                    if (missingJpItems.length > 0) {
+                        jpStatus.innerText = `누락된 ${missingJpItems.length}개 일본어 자막을 재번역하는 중...`;
+                        jpProgress.style.width = '75%';
+
+                        for (let bs = 0; bs < missingJpItems.length; bs += 30) {
+                            const mBatch = missingJpItems.slice(bs, bs + 30);
+                            const retryPrompt = `
+                                You are a professional Japanese translator.
+                                Translate each item's "text" field into Japanese and return it in the "japanese" field.
+                                [CRITICAL RULES]
+                                1. Output must contain ONLY Japanese characters (hiragana, katakana, kanji). No Korean, no Chinese, no other languages.
+                                2. No quotation marks. No line breaks.
+                                3. Return exactly ${mBatch.length} items. Do NOT skip any.
+                                [Translation tone] ${selectedJpTone}
+                                Input data: ${JSON.stringify(mBatch)}
+                            `;
+                            const retryResp = await fetch(generateUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    contents: [{ parts: [{ text: retryPrompt }] }],
+                                    generationConfig: {
+                                        responseMimeType: "application/json",
+                                        responseSchema: { type: "ARRAY", items: { type: "OBJECT", properties: { index: { type: "INTEGER" }, japanese: { type: "STRING" } }, required: ["index", "japanese"] } }
+                                    }
+                                })
+                            });
+                            const retryData = await retryResp.json();
+                            if (!retryData.error) {
+                                const retryResults = JSON.parse(retryData.candidates[0].content.parts[0].text);
+                                for (const rj of retryResults) {
+                                    if (rj.index >= 0 && rj.index < scripts.length) {
+                                        scripts[rj.index].japanese = removeKoreanB(rj.japanese || '');
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     jpStatus.innerText = '4/4: 에디터에 적용하는 중...';
                     jpProgress.style.width = '85%';
 
@@ -912,12 +1070,10 @@
                     scripts.forEach(item => {
                         const row = createSubtitleRow(item);
                         // 일본어 textarea 추가
-                        if (item.japanese) {
-                            const jpInput = document.createElement('textarea');
-                            jpInput.className = 'text-input japanese-text';
-                            jpInput.value = item.japanese;
-                            row.querySelector('.text-container').appendChild(jpInput);
-                        }
+                        const jpInput = document.createElement('textarea');
+                        jpInput.className = 'text-input japanese-text';
+                        jpInput.value = item.japanese || '';
+                        row.querySelector('.text-container').appendChild(jpInput);
                         editorArea.appendChild(row);
                     });
 
@@ -1099,70 +1255,81 @@
             (window.top || window).open(xUrl, '_blank');
         });
 
-        // --- 3. AI 윤문 에디터 ---
-        let currentSelection = { targetElement: null, startPos: 0, endPos: 0, selectedText: "" };
-        document.addEventListener('mouseup', (e) => {
-            if (e.target.classList.contains('translated-text')) {
-                const textarea = e.target;
-                const start = textarea.selectionStart;
-                const end = textarea.selectionEnd;
-                if (start !== end) {
-                    const text = textarea.value.substring(start, end).trim();
-                    if (text.length > 0) {
-                        currentSelection = { targetElement: textarea, startPos: start, endPos: end, selectedText: text };
-                        fetchAlternatives(text);
-                    }
-                }
+        // --- 3. 영상 키포인트 요약 ---
+        document.getElementById('generateSummaryBtn').addEventListener('click', async () => {
+            const rows = document.querySelectorAll('.script-row');
+            if (rows.length === 0) {
+                alert('먼저 자막을 추출해 주세요!');
+                return;
             }
-        });
 
-        async function fetchAlternatives(text) {
-            const resultsContainer = document.getElementById('suggestionResults');
-            const panelLoading = document.getElementById('panelLoading');
-            resultsContainer.innerHTML = ''; 
-            panelLoading.style.display = 'block';
+            const summaryLoading = document.getElementById('summaryLoading');
+            const summaryResult = document.getElementById('summaryResult');
+            const summaryBtn = document.getElementById('generateSummaryBtn');
+            summaryLoading.style.display = 'block';
+            summaryResult.innerHTML = '';
+            summaryBtn.disabled = true;
+
+            // 모든 번역 자막 수집
+            const allTranslations = [];
+            rows.forEach(row => {
+                const translated = row.querySelector('.translated-text');
+                if (translated && translated.value.trim()) {
+                    allTranslations.push(translated.value.trim());
+                }
+            });
 
             try {
                 const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
-                const promptText = `다음 한국어 문장을 아나운서 톤으로 자연스럽게 다듬은 3가지 다른 버전을 제안해 줘. (따옴표 절대 금지) 원본: "${text}"`;
-                
+                const promptText = `아래는 한 영상의 전체 자막이다. 이 영상에서 가장 중요한 핵심 포인트를 1~3문장으로 간결하게 요약해라.
+[규칙]
+1. 한국어로 작성하라.
+2. 따옴표 사용 금지.
+3. 불필요한 서론(이 영상은~) 없이 핵심만 바로 작성하라.
+4. 시청자가 영상을 보지 않아도 핵심 내용을 파악할 수 있도록 구체적으로 작성하라.
+
+전체 자막:
+${allTranslations.join(' ')}`;
+
                 const requestBody = {
                     contents: [{ parts: [{ text: promptText }] }],
-                    generationConfig: { 
+                    generationConfig: {
                         responseMimeType: "application/json",
                         responseSchema: {
-                            type: "ARRAY",
-                            items: { type: "STRING" }
+                            type: "OBJECT",
+                            properties: {
+                                summary: { type: "STRING" }
+                            },
+                            required: ["summary"]
                         }
                     }
                 };
 
                 const response = await fetch(generateUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) });
                 const data = await response.json();
-                let rawText = data.candidates[0].content.parts[0].text; 
-                const alternatives = JSON.parse(rawText);
-                
-                panelLoading.style.display = 'none';
-                alternatives.forEach((alt, index) => {
-                    const box = document.createElement('div');
-                    box.className = 'suggestion-box';
-                    box.title = "더블클릭하면 텍스트가 교체됩니다.";
-                    box.innerHTML = `<b>버전 ${index + 1}</b><br>${alt}`;
-                    box.addEventListener('dblclick', () => {
-                        if (!currentSelection.targetElement) return;
-                        const textarea = currentSelection.targetElement;
-                        textarea.value = textarea.value.substring(0, currentSelection.startPos) + alt + textarea.value.substring(currentSelection.endPos);
-                        document.getElementById('suggestionResults').innerHTML = '<div style="color:#4CAF50; font-size:13px; text-align:center; margin-top:20px;">성공적으로 교체되었습니다.</div>';
-                        currentSelection = { targetElement: null, startPos: 0, endPos: 0, selectedText: "" };
+                if (data.error) throw new Error(data.error.message);
+
+                const result = JSON.parse(data.candidates[0].content.parts[0].text);
+                summaryLoading.style.display = 'none';
+
+                summaryResult.innerHTML = `<div style="background: #253341; border: 1px solid #38444d; border-radius: 8px; padding: 16px; line-height: 1.7; font-size: 15px; color: #e7e9ea;">${result.summary}</div>
+                <button id="copySummaryBtn" style="margin-top: 8px; padding: 8px 16px; background: #38444d; color: #e7e9ea; border: none; border-radius: 4px; font-size: 13px; cursor: pointer; width: 100%; transition: 0.2s;">📋 복사하기</button>`;
+
+                document.getElementById('copySummaryBtn').addEventListener('click', () => {
+                    navigator.clipboard.writeText(result.summary).then(() => {
+                        document.getElementById('copySummaryBtn').innerText = '✅ 복사 완료!';
+                        setTimeout(() => { document.getElementById('copySummaryBtn').innerText = '📋 복사하기'; }, 2000);
                     });
-                    resultsContainer.appendChild(box);
                 });
+
             } catch (error) {
                 console.error(error);
-                panelLoading.style.display = 'none';
-                resultsContainer.innerHTML = '<div style="color:#ef4444; font-size:12px;">오류가 발생했습니다.</div>';
+                summaryLoading.style.display = 'none';
+                summaryResult.innerHTML = '<div style="color:#ef4444; font-size:12px;">요약 생성 중 오류가 발생했습니다.</div>';
+            } finally {
+                summaryBtn.disabled = false;
             }
-        }
+        });
 
         // --- 4. 고화질 영상 렌더링 및 AI 더빙 ---
         // Fix: HH:MM:SS 포맷 지원을 위해 상단의 parseTimeStr()에 위임
@@ -1519,7 +1686,7 @@
                         function wrapTextLines(text, font, mw, isJapanese) {
                             ctx.font = font;
                             const sentenceSplits = text
-                                .split(/(?<=[.?!。！？])\s*|(?<=습니다)\s+|(?<=했다)\s+|(?<=이다)\s+/)
+                                .split(/(?<=[.?!。！？])(?<!\.\.)(?!\.)(?:\s*)|(?<=습니다)(?:\s+)|(?<=했다)(?:\s+)|(?<=이다)(?:\s+)/)
                                 .filter(s => s.trim().length > 0);
                             const result = [];
                             for (const sentence of sentenceSplits) {
@@ -2099,7 +2266,8 @@
                     const dataTransfer = new DataTransfer();
                     dataTransfer.items.add(file);
                     videoFileInput.files = dataTransfer.files;
-                    alert(`✅ "${file.name}" 영상이 업로드되었습니다!\n\n이제 "1. 원문 및 번역본 추출하기" 버튼을 클릭하세요.`);
+                    // change 이벤트를 수동 트리거하여 초기화 로직 실행
+                    videoFileInput.dispatchEvent(new Event('change'));
                 } else {
                     alert('⚠️ 비디오 파일만 업로드 가능합니다. (MP4, WebM, MOV)');
                 }
