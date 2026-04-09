@@ -132,6 +132,13 @@
         <input type="file" id="videoFile" accept="video/mp4, video/webm, video/quicktime">
         <span style="font-size:12px; color:#71767b; margin-left:8px;">또는 이 영역에 영상 파일을 드래그하세요</span>
 
+        <div style="margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <label style="font-size: 13px; font-weight: bold; color: #8899a6;">🔑 Gemini API Key:</label>
+            <input type="password" id="apiKeyInput" placeholder="API 키를 입력하세요" style="padding: 6px 10px; border: 1px solid #38444d; border-radius: 4px; background: #253341; color: #e7e9ea; font-size: 13px; width: 320px;">
+            <button id="saveApiKeyBtn" style="padding: 6px 12px; font-size: 12px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">저장</button>
+            <span id="apiKeyStatus" style="font-size: 11px; color: #4CAF50;"></span>
+        </div>
+
         <div style="margin: 12px 0; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
             <label style="font-size: 14px; font-weight: bold; color: #8899a6;">🗣️ 한국어 말투:</label>
             <select id="toneSelect" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #38444d; font-size: 14px; font-weight: 600; background: #253341; color: #e7e9ea; cursor: pointer;">
@@ -343,9 +350,32 @@
     </div>
 
     <script>
-        const API_KEY = 'AIzaSyDeCwcu8wzVMQoocwTatMzGVla8dPJvyKM'; 
-        const TTS_API_KEY = 'AIzaSyBrblN5JgbtMrys4x6wAEuF3ih0JuyAg2M';
+        let API_KEY = localStorage.getItem('gemini_api_key') || '';
+        let TTS_API_KEY = localStorage.getItem('tts_api_key') || '';
         const MODEL_NAME = 'gemini-flash-latest';
+
+        // API 키 UI 초기화
+        (function initApiKey() {
+            const input = document.getElementById('apiKeyInput');
+            const status = document.getElementById('apiKeyStatus');
+            if (API_KEY) {
+                input.value = API_KEY;
+                status.innerText = '✅ 저장된 키 로드됨';
+            }
+            document.getElementById('saveApiKeyBtn').addEventListener('click', () => {
+                const key = input.value.trim();
+                if (!key) { alert('API 키를 입력하세요.'); return; }
+                API_KEY = key;
+                localStorage.setItem('gemini_api_key', key);
+                // TTS 키도 같이 저장 (같은 키 사용 가능)
+                if (!TTS_API_KEY) {
+                    TTS_API_KEY = key;
+                    localStorage.setItem('tts_api_key', key);
+                }
+                status.innerText = '✅ 저장 완료! (브라우저에 기억됨)';
+                status.style.color = '#4CAF50';
+            });
+        })();
 
         let originalVideoFile = null;
         let lastUploadedFileName = null;
@@ -602,6 +632,7 @@
             const editorArea = document.getElementById('editorArea');
             const renderOptions = document.getElementById('renderOptions');
 
+            if (!API_KEY) { alert('🔑 먼저 Gemini API 키를 입력하고 저장하세요!'); return; }
             if (!file) { alert('동영상 파일을 선택해 주세요!'); return; }
             originalVideoFile = file;
             lastUploadedFileName = file.name + '_' + file.size + '_' + file.lastModified;
@@ -760,6 +791,7 @@
             const rows = document.querySelectorAll('.script-row');
             const hasKorean = rows.length > 0;
 
+            if (!API_KEY) { alert('🔑 먼저 Gemini API 키를 입력하고 저장하세요!'); return; }
             if (!hasKorean && !file) {
                 alert('동영상 파일을 선택해 주세요!');
                 return;
