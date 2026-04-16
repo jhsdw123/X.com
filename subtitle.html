@@ -124,6 +124,20 @@
 </head>
 <body>
 
+    <!-- ─── 우측 상단 고정: 현재 작업 중인 영상 썸네일 ─── -->
+    <div id="currentVideoPanel" style="position: fixed; top: 16px; right: 16px; z-index: 9999; background: #15202b; border: 1px solid #38444d; border-radius: 8px; padding: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.5); display: none; width: 200px;">
+        <div style="font-size: 10px; color: #8899a6; margin-bottom: 6px; font-weight: 700; letter-spacing: 0.3px; display: flex; justify-content: space-between; align-items: center;">
+            <span>🎬 현재 작업 영상</span>
+            <button id="currentVideoCloseBtn" type="button" title="숨기기" style="background: transparent; border: none; color: #71767b; cursor: pointer; font-size: 14px; padding: 0 4px; line-height: 1;">×</button>
+        </div>
+        <div style="position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 4px; overflow: hidden;">
+            <img id="currentVideoThumb" alt="thumbnail" style="width: 100%; height: 100%; object-fit: contain; display: block;">
+            <div id="currentVideoSpinner" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #8899a6; font-size: 11px;">썸네일 생성 중...</div>
+        </div>
+        <div id="currentVideoName" style="font-size: 10px; color: #e7e9ea; margin-top: 6px; word-break: break-all; line-height: 1.3; max-height: 28px; overflow: hidden; font-family: monospace;"></div>
+        <div id="currentVideoMeta" style="font-size: 9px; color: #71767b; margin-top: 2px;"></div>
+    </div>
+
     <div class="header-section" id="dropZone">
         <h2>🎥 비디오 스크립트 칼싱크 추출 & X.com 스튜디오</h2>
         <div id="dragOverlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(37,99,235,0.15); border:3px dashed #2563eb; border-radius:8px; z-index:99; pointer-events:none;">
@@ -131,6 +145,24 @@
         </div>
         <input type="file" id="videoFile" accept="video/mp4, video/webm, video/quicktime">
         <span style="font-size:12px; color:#71767b; margin-left:8px;">또는 이 영역에 영상 파일을 드래그하세요</span>
+
+        <!-- ─── URL로 영상 다운로드 (yt-dlp 로컬 서버 필요) ─── -->
+        <div style="margin: 12px 0; padding: 12px; background: #15202b; border: 1px solid #38444d; border-radius: 8px;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <label for="videoUrlInput" style="font-size: 14px; font-weight: bold; color: #8899a6; white-space: nowrap;">🔗 영상 URL:</label>
+                <input type="url" id="videoUrlInput" placeholder="https://x.com/... , https://youtube.com/... , https://tiktok.com/... 등"
+                       style="flex: 1; min-width: 320px; padding: 8px 12px; border-radius: 6px; border: 1px solid #38444d; font-size: 14px; background: #253341; color: #e7e9ea;">
+                <button type="button" id="downloadUrlBtn" style="padding: 8px 16px; border-radius: 6px; border: none; font-size: 14px; font-weight: 600; background: #10b981; color: white; cursor: pointer;">⬇️ 다운로드</button>
+                <span id="ytDlpServerStatus" style="font-size: 12px; color: #71767b;">서버 상태 확인 중...</span>
+            </div>
+            <div id="urlDownloadProgress" style="display: none; margin-top: 10px;">
+                <div class="progress-bar-track"><div class="progress-bar-fill" id="urlDownloadBar" style="background: #10b981;"></div></div>
+                <div id="urlDownloadStatus" style="font-size: 12px; color: #8899a6; margin-top: 4px;">준비 중...</div>
+            </div>
+            <div style="font-size: 11px; color: #71767b; margin-top: 6px;">
+                X(트위터), YouTube, TikTok, Instagram 등 지원. 로컬에서 <code style="background:#253341; padding:1px 4px; border-radius:3px;">node yt-dlp-server.js</code> 실행 필요.
+            </div>
+        </div>
 
         <div style="margin-top: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <label style="font-size: 13px; font-weight: bold; color: #8899a6;">🔑 Gemini API Key:</label>
@@ -144,6 +176,7 @@
             <select id="toneSelect" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #38444d; font-size: 14px; font-weight: 600; background: #253341; color: #e7e9ea; cursor: pointer;">
                 <option value="anchor">📺 뉴스 앵커 (~습니다)</option>
                 <option value="slang">🤬 비속어/은어 반말 (존나, ㅆㅂ 등)</option>
+                <option value="casual">🙂 일반 반말 (~했어, ~거든, ~잖아)</option>
                 <option value="polite">😊 부드러운 존댓말 (~했어요, ~할게요)</option>
                 <option value="stern">⚖️ 강경 공표체 (~했다, ~이다)</option>
             </select>
@@ -153,6 +186,7 @@
             <select id="jpToneSelect" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #38444d; font-size: 14px; font-weight: 600; background: #253341; color: #e7e9ea; cursor: pointer;">
                 <option value="yakuza">🤬 야쿠자 비속어 (てめぇ, クソ 등)</option>
                 <option value="casual">😄 캐주얼 반말 (~だよね, ~じゃん)</option>
+                <option value="senpai">🧢 선배한테 편하게 (~っす・~ですよ)</option>
                 <option value="keigo">😊 격식체 존경어 (~でございます)</option>
                 <option value="news">📺 뉴스 아나운서 (~です・~ました)</option>
             </select>
@@ -421,11 +455,45 @@
             return 0;
         }
 
-        // 초(숫자)를 "MM:SS" 형식으로 변환
+        // 초(숫자)를 "HH:MM:SS.mmm" 형식으로 변환 — 밀리초 해상도 유지
+        // (parseTimeStr과 호환: parseFloat으로 소수점 처리됨)
         function formatTimeStr(sec) {
-            const m = Math.floor(sec / 60);
-            const s = Math.floor(sec % 60);
-            return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+            if (!isFinite(sec) || sec < 0) sec = 0;
+            const h = Math.floor(sec / 3600);
+            const m = Math.floor((sec % 3600) / 60);
+            const s = sec % 60;
+            const pad = (n) => String(n).padStart(2, '0');
+            // 초 부분: 소수점 3자리까지 (예: "03.250") — 6자로 좌측 0 패딩
+            const secStr = s.toFixed(3).padStart(6, '0');
+            return `${pad(h)}:${pad(m)}:${secStr}`;
+        }
+
+        // 비디오 파일에서 재생 시간(초) 추출 — Gemini 프롬프트에 주입하여 타임스탬프 정확도 향상
+        function getVideoDuration(file) {
+            return new Promise((resolve) => {
+                if (!file) return resolve(null);
+                const url = URL.createObjectURL(file);
+                const v = document.createElement('video');
+                v.src = url;
+                v.preload = 'metadata';
+                const done = (val) => {
+                    URL.revokeObjectURL(url);
+                    try { v.removeAttribute('src'); v.load(); } catch (_) {}
+                    resolve(val);
+                };
+                v.onloadedmetadata = () => done(isFinite(v.duration) ? v.duration : null);
+                v.onerror = () => done(null);
+                setTimeout(() => done(null), 5000); // 안전망
+            });
+        }
+
+        // 프롬프트용 영상 길이 힌트 블록 생성
+        function buildDurationHint(durationSec) {
+            if (!durationSec || !isFinite(durationSec) || durationSec <= 0) return '';
+            return `[📏 영상 총 길이 — 반드시 준수]
+                    영상의 정확한 총 재생 시간은 ${durationSec.toFixed(3)}초 (${formatTimeStr(durationSec)})이다.
+                    모든 자막의 start/end 타임스탬프는 반드시 00:00:00.000 이상 ${formatTimeStr(durationSec)} 이하 범위에 있어야 한다.
+                    영상 끝을 넘어가는 타임스탬프를 만들지 마라. 마지막 자막의 end는 영상 총 길이에 가깝게 맞춰라 (±0.5초 이내 권장).`;
         }
 
         // ─────────────────────────────────────────────────
@@ -507,9 +575,10 @@
         }
 
         // ─────────────────────────────────────────────────
-        // 자막 싱크 보정 후처리
-        // 1) 불필요한 자막 간 공백 제거 (연속 대사면 이어 붙임)
-        // 2) 최소 표시 시간 보장 (짧은 자막 → end를 늘림)
+        // 자막 싱크 보정 후처리 (드리프트 방지를 위해 매우 보수적으로 동작)
+        // 1) 극단적으로 짧은 자막만 최소 0.5초 보장 (읽을 수 없는 0.1초짜리 방지용)
+        // 2) 아주 작은 gap(0.3초 이하)만 이어 붙임 — 큰 gap은 침묵 구간일 가능성이 높으므로 유지
+        // 3) start는 절대 건드리지 않는다 (드리프트 원인)
         // ─────────────────────────────────────────────────
         function fixSubtitleSync(scripts) {
             if (!scripts || scripts.length === 0) return scripts;
@@ -517,33 +586,29 @@
             for (let i = 0; i < scripts.length; i++) {
                 let startSec = parseTimeStr(scripts[i].start);
                 let endSec = parseTimeStr(scripts[i].end);
-                const textLen = (scripts[i].translation || '').length;
 
-                // 최소 표시 시간: 글자 20자 이상이면 3초, 아니면 2초
-                const minDuration = textLen >= 20 ? 3 : 2;
+                // 최소 표시 시간 0.5초 — 너무 짧아 읽을 수 없는 자막만 방지
+                // (여러 발화를 병합하도록 유도하는 종전의 2~3초 규칙 폐기)
+                const MIN_DURATION = 0.5;
                 let duration = endSec - startSec;
 
-                // 표시 시간이 최소보다 짧으면 end를 늘림
-                if (duration > 0 && duration < minDuration) {
-                    endSec = startSec + minDuration;
-
-                    // 다음 자막의 start를 침범하지 않도록 제한
+                if (duration > 0 && duration < MIN_DURATION) {
+                    endSec = startSec + MIN_DURATION;
+                    // 다음 자막 start를 침범하지 않도록 제한
                     if (i < scripts.length - 1) {
                         const nextStart = parseTimeStr(scripts[i + 1].start);
                         if (endSec > nextStart) endSec = nextStart;
                     }
-
                     scripts[i].end = formatTimeStr(endSec);
                 }
 
-                // 다음 자막과의 불필요한 공백 제거
-                // 자막 간 간격이 1.5초 이하이면 공백 없이 이어 붙임
+                // 아주 작은 gap(≤ 0.3초)만 이어 붙임 — 그 이상은 실제 침묵일 가능성이 높음
+                // (종전의 1.5초 임계값은 화자의 자연스러운 호흡·끊김까지 삼켜버려 드리프트를 악화시킴)
                 if (i < scripts.length - 1) {
                     const nextStartSec = parseTimeStr(scripts[i + 1].start);
                     const gap = nextStartSec - endSec;
 
-                    if (gap > 0 && gap <= 1.5) {
-                        // 현재 자막의 end를 다음 자막의 start까지 확장
+                    if (gap > 0 && gap <= 0.3) {
                         scripts[i].end = scripts[i + 1].start;
                     }
                 }
@@ -677,14 +742,21 @@
                 const toneRules = {
                     anchor: '뉴스 아나운서의 톤앤매너로 번역한다. 어미는 "~습니다", "~했습니다" 체를 사용하라.',
                     slang: '거친 반말체로 번역한다. 원문에 Fuck, Damn, Shit, Freaking 등 비속어가 있으면 존나, ㅆㅂ, 개같은, 미친, 쌈뽕하게 등 한국어 비속어/은어로 번역하라. 비속어가 없는 문장도 반말체("~했어", "~거든", "~잖아", "~ㅋㅋ")로 번역하라.',
+                    casual: '일반 반말체로 번역하라. 비속어/은어는 절대 사용하지 마라(존나, ㅆㅂ, 개같은 등 금지). 친구에게 편하게 말하듯 자연스러운 반말 어미를 사용하라: "~했어", "~야", "~거든", "~잖아", "~지", "~더라", "~더라고", "~네", "~겠다", "~같아". 영상이 분노·정색·무감정 톤이어도 비속어 없이 반말로만 그 감정을 살려라(예: "진짜 어이없다", "말도 안 돼", "그걸 왜 해").',
                     polite: '부드러운 존댓말로 번역한다. 어미는 "~했어요", "~할게요", "~인 것 같아요", "~거든요" 체를 사용하라.',
                     stern: '강경하고 권위적인 공표체로 번역한다. 어미는 "~했다", "~이다", "~할 것이다", "~해야 한다" 체를 사용하라. 마치 대통령 성명서처럼 단호하게.'
                 };
                 const selectedToneRule = toneRules[toneValue] || toneRules.anchor;
 
+                // 영상 재생 시간을 측정하여 프롬프트에 힌트로 주입 (타임스탬프 정확도 ↑)
+                const videoDurationSec = await getVideoDuration(file);
+                const durationHintBlock = buildDurationHint(videoDurationSec);
+
                 const promptText = `
                     첨부된 영상의 모든 대사를 빠짐없이 추출하고 한국어로 번역해 줘.
                     너는 전문 영상 번역가이자 자막 편집자다. 다음 규칙을 반드시 준수하라:
+
+                    ${durationHintBlock}
 
                     [🚨🚨🚨 가장 중요: 음성 누락 절대 금지]
                     - 영상에서 들리는 모든 음성을 빠짐없이 추출하라. 단 한 마디도 빠뜨리지 마라.
@@ -692,14 +764,20 @@
                     - 감탄사, 추임새, 반응("Wow", "Oh", "Hmm", "Uh-huh" 등)도 들리면 반드시 포함하라.
                     - 배경 대화가 아닌 이상, 화면에 등장하는 사람이 말하는 모든 것을 추출하라.
 
-                    [자막 분할 및 타임라인 규칙]
-                    1. 시작과 끝 시간 명시: 자막이 화면에 나타나는 시간(start)과 사라지는 시간(end)을 명확히 구분하라.
-                    2. ⏱️ 자막 간 공백 최소화 (매우 중요): 연속된 대사 사이에 불필요한 공백을 넣지 마라. 자막1의 end와 자막2의 start 사이에 실제로 침묵이 없다면 공백 없이 이어 붙여라. 오직 실제 침묵 구간(사람이 말하지 않는 시간)에서만 자막을 비워라.
-                    3. ⏱️ 자막 길이 절대 제한: 하나의 자막 항목(start~end)은 절대 7초를 초과해서는 안 된다.
-                    4. ⏱️ 최소 표시 시간: 한국어 번역 글자 수에 비례하여 충분한 표시 시간을 확보하라. 최소 2초 이상, 글자가 많으면(20자 이상) 최소 3초 이상을 확보하라. 2초 미만으로 사라지는 자막은 절대 만들지 마라.
-                    5. 문장 단위 분할: 한 자막에는 최대 1~2문장(약 30~40자)만 포함하라.
+                    [🚨 자막 분할 원칙 — 드리프트 방지의 핵심]
+                    ★ 최우선 원칙: 1 자막 = 1 발화 단위. 각 자막은 화자가 호흡 없이 한 번에 말하는 한 덩어리여야 한다. 서로 다른 문장·발화를 절대로 하나의 자막에 묶지 마라.
+                    ★ 발화 간 침묵이 0.3초 이상 있으면 반드시 자막을 분리하라. 병합 금지.
+                    ★ 영어 원문의 한 문장(punctuation 기준) 당 한 자막을 원칙으로 하라. 영어가 3문장이면 한국어도 3개의 자막으로 출력하라 (번역이 짧아져도 병합하지 마라).
+                    ★ 짧은 발화(예: "Yeah", "No way", "Who are you") 는 그 발화의 실제 지속 시간(0.3~0.8초)에 맞춰 정확히 찍어라. 길게 늘리지 마라.
+
+                    [자막 타임라인 규칙]
+                    1. 시작과 끝 시간은 실제 발화의 시작·종료 순간의 밀리초 단위로 정확히 찍어라. 절대 대충 추정하거나 반올림하지 마라.
+                    2. 침묵 구간(화자가 말하지 않는 구간)은 자막 없이 비워둬라. 앞 자막의 end를 뒤 자막 start까지 늘리려 하지 마라.
+                    3. 자막 길이 제한: 하나의 자막은 5초를 초과하지 마라. 5초 넘는 발화는 자연스러운 호흡 지점에서 2개로 나눠라.
+                    4. 최소 표시 시간 제한 없음: 실제 발화가 0.3초면 0.3초, 0.8초면 0.8초로 찍어라. "표시 시간이 짧아 보인다"는 이유로 주변 자막과 병합하지 마라.
+                    5. 한 자막에는 최대 1문장(약 30~40자)만 포함하라. 두 문장 이상이면 반드시 분리.
                     6. 시간 순서 보장: start는 반드시 이전 자막의 end보다 같거나 커야 한다.
-                    7. 시간 형식 통일: 반드시 "MM:SS" 형식(예: 01:23)으로 통일하라. 소수점 사용 금지.
+                    7. ⭐️ 시간 형식: 반드시 "HH:MM:SS.mmm" 형식(예: 00:00:03.250). 소수점 아래 3자리(밀리초). 절대 정수 초로 반올림/1초 grid 스냅 금지.
                     8. 영상 끝까지 빠짐없이 추출하라.
 
                     [번역 규칙 및 특수문자 절대 금지 🚨🚨🚨]
@@ -747,7 +825,7 @@
                 }
 
                 // 후처리 1: 7초 초과 자막 분할
-                scripts = splitLongSubtitles(scripts, 7);
+                scripts = splitLongSubtitles(scripts, 5);
 
                 // 후처리 2: 자막 싱크 보정 (불필요한 공백 제거 + 최소 표시시간 보장)
                 scripts = fixSubtitleSync(scripts);
@@ -807,6 +885,7 @@
             const jpToneRules = {
                 yakuza: '야쿠자(극도로 거친 남성형) 말투로 번역하라. てめぇ, クソ, ふざけんな, ぶっ殺す, このヤロウ 등 거친 비속어와 협박조 표현을 적극 사용하라. 비속어가 없는 문장도 거친 반말(~だろうが, ~じゃねぇか, ~しやがれ)로 번역하라.',
                 casual: '친구끼리 편하게 대화하는 タメ口(반말) 톤으로 번역하라. ~だよね, ~じゃん, ~でしょ, ~だろう, ~かな, ~だね, ~ってさ 같은 캐주얼한 어미를 사용하라. 비속어는 사용하지 말고, 존경어도 사용하지 마라. 친구에게 설명하듯 자연스럽고 가벼운 말투를 유지하라.',
+                senpai: '친한 선배(年上の先輩)에게 편하게 말하는 톤으로 번역하라. タメ口(반말)도 아니고 敬語(존경어)도 아닌, 가벼운 ですます体와 ~っす体를 섞어 사용하라. 어미 예시: ~っす, ~っすね, ~っすよ, ~ないっす, ~ですよね, ~でしたよ, ~なんすよ, ~マジっすか, ~ですわ. 敬語(~でございます, ~いたします, ~させていただきます)는 절대 사용하지 마라. 너무 공손하거나 착한 말투로 바꾸지 마라 — 영상이 분노·정색·무감정 톤이면 그 감정을 그대로 살려라. 짜증/화/비꼼 표현도 이 어투 안에서 자연스럽게 표현하라 (예: "マジありえないっすよ", "は？何言ってんすか", "知らねえっすわ", "どうでもいいっす", "ふざけんなっすよ"). 원문 감정이 거칠면 거칠게, 무감정이면 담담하게, 단 어미는 항상 っす/ですます 레벨을 유지하라.',
                 keigo: '격식을 갖춘 존경어(敬語)로 번역하라. ~でございます, ~させていただきます, ~いたします 등 정중한 경어체를 사용하라.',
                 news: 'NHK 뉴스 아나운서의 톤앤매너로 번역하라. ~です, ~ました, ~とのことです, ~と見られています 등 뉴스 보도체를 사용하라.'
             };
@@ -980,24 +1059,38 @@
                     const toneRules = {
                         anchor: '뉴스 아나운서 톤. 어미는 "~습니다", "~했습니다" 체.',
                         slang: '거친 반말체. 비속어 포함(존나, ㅆㅂ, 개같은 등). 반말(~했어, ~거든, ~잖아).',
+                        casual: '일반 반말체. 비속어/은어 금지. 친구에게 편히 말하듯 "~했어", "~야", "~거든", "~잖아", "~지", "~더라", "~네" 체. 분노·정색 톤도 비속어 없이 반말로 감정을 살릴 것.',
                         polite: '부드러운 존댓말. 어미는 "~했어요", "~할게요" 체.',
                         stern: '강경 공표체. 어미는 "~했다", "~이다" 체. 대통령 성명서처럼.'
                     };
                     const selectedKoTone = toneRules[toneValue] || toneRules.anchor;
 
+                    // 영상 재생 시간 힌트
+                    const videoDurationSec = await getVideoDuration(file);
+                    const durationHintBlock = buildDurationHint(videoDurationSec);
+
                     const comboPrompt = `
                         첨부된 영상의 모든 대사를 빠짐없이 추출하고, 한국어와 일본어로 동시에 번역해 줘.
                         너는 전문 영상 번역가다. 다음 규칙을 반드시 준수하라:
+
+                        ${durationHintBlock}
 
                         [음성 누락 절대 금지]
                         - 영상에서 들리는 모든 음성을 빠짐없이 추출하라.
                         - 짧은 구어체, 감탄사, 추임새도 반드시 포함.
 
-                        [자막 분할 및 타임라인]
-                        1. start/end 시간 명시. 자막 간 불필요한 공백 금지.
-                        2. 하나의 자막은 7초 이내. 최소 2초 이상.
-                        3. 한 자막에 1~2문장(30~40자). 시간 순서 보장.
-                        4. 시간 형식: "MM:SS". 소수점 금지. 영상 끝까지 추출.
+                        [🚨 자막 분할 원칙 — 드리프트 방지의 핵심]
+                        ★ 1 자막 = 1 발화 단위. 서로 다른 문장·발화를 절대 하나의 자막에 묶지 마라.
+                        ★ 발화 간 침묵이 0.3초 이상이면 반드시 자막 분리. 병합 금지.
+                        ★ 영어 원문 한 문장 당 자막 한 개 원칙. 번역이 짧아져도 병합 금지.
+                        ★ 짧은 발화("Yeah", "Who are you" 등)는 실제 지속 시간(0.3~0.8초) 그대로.
+
+                        [자막 타임라인]
+                        1. start/end는 실제 발화의 밀리초 단위 정확한 시점. 추정·반올림 금지.
+                        2. 침묵 구간은 자막 없이 비워둬라. end를 다음 start까지 늘리지 마라.
+                        3. 하나의 자막은 5초 이내. 최소 표시 시간 제한 없음 — 실제 발화 길이 그대로.
+                        4. 한 자막에 1문장(30~40자). 두 문장이면 반드시 분리. 시간 순서 보장.
+                        5. ⭐️ 시간 형식: 반드시 "HH:MM:SS.mmm" (예: 00:00:03.250). 밀리초까지 정확히. 정수 초 반올림·1초 grid 스냅 절대 금지. 영상 끝까지 추출.
 
                         [번역 규칙]
                         1. 따옴표(큰따옴표, 작은따옴표) 절대 금지.
@@ -1037,7 +1130,7 @@
                     if (genData.error) throw new Error(`API 에러: ${genData.error.message}`);
 
                     let scripts = JSON.parse(genData.candidates[0].content.parts[0].text);
-                    scripts = splitLongSubtitles(scripts, 7);
+                    scripts = splitLongSubtitles(scripts, 5);
                     scripts = fixSubtitleSync(scripts);
 
                     // 한국어 문자 혼입 제거 후처리
@@ -1489,7 +1582,30 @@ ${allTranslations.join(' ')}`;
                     audioBitsPerSecond: 128000
                 };
 
-                let drawFrameTimer = null; // Fix: 타이머 ID 보관 (안전 종료용)
+                // ⭐️ 프레임 스케줄러 — RVFC 우선, 미지원 환경은 setTimeout 폴백
+                // setTimeout은 타이머 정확도가 낮아 프레임 손실이 누적 → 입모양/소리 싱크가 점점 밀리는 원인.
+                // requestVideoFrameCallback(RVFC)는 비디오가 실제로 새 프레임을 표시할 때마다 정확히 호출되므로
+                // 비디오의 원본 프레임레이트(30fps·60fps·VFR 등)에 정확히 맞춰 캔버스를 그림 → 프레임 손실 0에 수렴.
+                let drawFrameScheduler = null;
+                const useRVFC = 'requestVideoFrameCallback' in renderVideo;
+                function scheduleNextDrawFrame() {
+                    if (useRVFC) {
+                        const handle = renderVideo.requestVideoFrameCallback(drawFrame);
+                        drawFrameScheduler = { type: 'rvfc', handle };
+                    } else {
+                        const tid = setTimeout(drawFrame, 1000 / 30);
+                        drawFrameScheduler = { type: 'timeout', handle: tid };
+                    }
+                }
+                function cancelDrawFrame() {
+                    if (!drawFrameScheduler) return;
+                    if (drawFrameScheduler.type === 'rvfc' && 'cancelVideoFrameCallback' in renderVideo) {
+                        try { renderVideo.cancelVideoFrameCallback(drawFrameScheduler.handle); } catch (_) {}
+                    } else if (drawFrameScheduler.type === 'timeout') {
+                        clearTimeout(drawFrameScheduler.handle);
+                    }
+                    drawFrameScheduler = null;
+                }
                 let recorder = null; // ⭐️ Fix: canplay 직전에 생성하여 스트림 타임스탬프 동기화
                 function drawFrame() {
                     if (renderVideo.paused || renderVideo.ended) return;
@@ -1866,8 +1982,8 @@ ${allTranslations.join(' ')}`;
                     // 워터마크 그리기 (이미지 업로드된 경우에만)
                     _wmRender(ctx, canvas);
 
-                    // 브라우저 탭이 백그라운드로 가면 requestAnimationFrame이 멈추는 현상 방지
-                    drawFrameTimer = setTimeout(drawFrame, 1000 / 30); // 약 30FPS 강제 유지
+                    // 다음 프레임 스케줄 — RVFC면 비디오의 다음 실제 프레임에, 폴백이면 33ms 후에 호출됨
+                    scheduleNextDrawFrame();
                 }
 
                 audioCtx.resume().then(() => {
@@ -1885,7 +2001,9 @@ ${allTranslations.join(' ')}`;
                         videoAudioSource.connect(videoGain);
                         videoGain.connect(dest);
 
-                        const canvasStream = canvas.captureStream(30);
+                        // ⭐️ fps 인자 없음: 캔버스가 실제로 업데이트될 때만 프레임 emit
+                        // RVFC와 결합하면 비디오 원본 fps(30/60/VFR)가 그대로 유지됨 → VFR 드리프트 제거
+                        const canvasStream = canvas.captureStream();
                         const combinedStream = new MediaStream([...canvasStream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
 
                         recorder = new MediaRecorder(combinedStream, recorderOptions);
@@ -1933,7 +2051,7 @@ ${allTranslations.join(' ')}`;
                 });
 
                 renderVideo.onended = () => {
-                    clearTimeout(drawFrameTimer);
+                    cancelDrawFrame();
 
                     // ── 엔드스크린 삽입 ──
                     const useEndScreen = document.getElementById('useEndScreen').checked;
@@ -1969,7 +2087,7 @@ ${allTranslations.join(' ')}`;
 
                 // Fix: 비디오 로드 오류 시 AudioContext 및 ObjectURL 정리
                 renderVideo.onerror = () => {
-                    clearTimeout(drawFrameTimer);
+                    cancelDrawFrame();
                     renderStatus.innerText = '오류: 비디오를 불러올 수 없습니다. 다시 시도해 주세요.';
                     renderBtn.disabled = false;
                     document.getElementById('useTtsCheckbox').disabled = false;
@@ -1990,32 +2108,32 @@ ${allTranslations.join(' ')}`;
             let srtContent = '';
             let srtIndex = 1;
 
-            // 시간을 SRT 표준 형식(HH:MM:SS,000)으로 변환하는 헬퍼 함수
+            // 시간을 SRT 표준 형식(HH:MM:SS,mmm)으로 변환하는 헬퍼 함수 — 밀리초 해상도 보존
             function formatTimeForSrt(timeStr) {
                 if (!timeStr) return "00:00:00,000";
-                
-                // 공백 제거나 불필요한 문자 제거
-                const cleanStr = timeStr.replace(/[^0-9:]/g, ''); 
+
+                // 숫자·콜론·소수점만 허용 (. 포함해야 밀리초 파싱 가능)
+                const cleanStr = String(timeStr).replace(/[^0-9:.]/g, '');
                 const parts = cleanStr.split(':');
-                
-                let h = 0, m = 0, s = 0;
-                
-                if (parts.length === 3) { // HH:MM:SS 형식
+
+                let h = 0, m = 0, sFloat = 0;
+
+                if (parts.length === 3) { // HH:MM:SS(.mmm) 형식
                     h = parseInt(parts[0], 10) || 0;
                     m = parseInt(parts[1], 10) || 0;
-                    s = parseInt(parts[2], 10) || 0;
-                } else if (parts.length === 2) { // MM:SS 형식
+                    sFloat = parseFloat(parts[2]) || 0;
+                } else if (parts.length === 2) { // MM:SS(.mmm) 형식
                     m = parseInt(parts[0], 10) || 0;
-                    s = parseInt(parts[1], 10) || 0;
-                } else { // SS 형식
-                    s = parseInt(parts[0], 10) || 0;
+                    sFloat = parseFloat(parts[1]) || 0;
+                } else { // SS(.mmm) 형식
+                    sFloat = parseFloat(parts[0]) || 0;
                 }
-                
-                // 두 자리 수로 패딩 (예: 5 -> 05)
-                const pad = (num) => String(num).padStart(2, '0');
-                
-                // 밀리초는 000으로 고정 (현재 Gemini가 초 단위까지만 주기 때문)
-                return `${pad(h)}:${pad(m)}:${pad(s)},000`;
+
+                const s = Math.floor(sFloat);
+                const ms = Math.round((sFloat - s) * 1000);
+                const pad = (num, n = 2) => String(num).padStart(n, '0');
+
+                return `${pad(h)}:${pad(m)}:${pad(s)},${pad(ms, 3)}`;
             }
 
             rows.forEach(row => {
@@ -2061,14 +2179,16 @@ ${allTranslations.join(' ')}`;
 
             function formatTimeForSrt(timeStr) {
                 if (!timeStr) return "00:00:00,000";
-                const cleanStr = timeStr.replace(/[^0-9:]/g, '');
+                const cleanStr = String(timeStr).replace(/[^0-9:.]/g, '');
                 const parts = cleanStr.split(':');
-                let h = 0, m = 0, s = 0;
-                if (parts.length === 3) { h = parseInt(parts[0], 10) || 0; m = parseInt(parts[1], 10) || 0; s = parseInt(parts[2], 10) || 0; }
-                else if (parts.length === 2) { m = parseInt(parts[0], 10) || 0; s = parseInt(parts[1], 10) || 0; }
-                else { s = parseInt(parts[0], 10) || 0; }
-                const pad = (num) => String(num).padStart(2, '0');
-                return `${pad(h)}:${pad(m)}:${pad(s)},000`;
+                let h = 0, m = 0, sFloat = 0;
+                if (parts.length === 3) { h = parseInt(parts[0], 10) || 0; m = parseInt(parts[1], 10) || 0; sFloat = parseFloat(parts[2]) || 0; }
+                else if (parts.length === 2) { m = parseInt(parts[0], 10) || 0; sFloat = parseFloat(parts[1]) || 0; }
+                else { sFloat = parseFloat(parts[0]) || 0; }
+                const s = Math.floor(sFloat);
+                const ms = Math.round((sFloat - s) * 1000);
+                const pad = (num, n = 2) => String(num).padStart(n, '0');
+                return `${pad(h)}:${pad(m)}:${pad(s)},${pad(ms, 3)}`;
             }
 
             rows.forEach(row => {
@@ -2141,22 +2261,34 @@ ${allTranslations.join(' ')}`;
                 srtProgress.style.width = '70%';
                 const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
 
+                // 영상 재생 시간 힌트
+                const videoDurationSec = await getVideoDuration(file);
+                const durationHintBlock = buildDurationHint(videoDurationSec);
+
                 const promptText = `
                     첨부된 영상의 모든 대사를 빠짐없이 원어 그대로 추출해 줘.
                     번역하지 마라. 영어면 영어, 한국어면 한국어, 일본어면 일본어, 중국어면 중국어 등 원래 언어 그대로 받아적어라.
+
+                    ${durationHintBlock}
 
                     [🚨🚨🚨 가장 중요: 음성 누락 절대 금지]
                     - 영상에서 들리는 모든 음성을 빠짐없이 추출하라. 단 한 마디도 빠뜨리지 마라.
                     - 감탄사, 추임새, 반응도 들리면 반드시 포함하라.
                     - 배경 대화가 아닌 이상, 화면에 등장하는 사람이 말하는 모든 것을 추출하라.
 
-                    [자막 분할 및 타임라인 규칙]
-                    1. 시작과 끝 시간 명시: 자막이 화면에 나타나는 시간(start)과 사라지는 시간(end)을 명확히 구분하라.
-                    2. 자막 간 공백 최소화: 연속된 대사 사이에 불필요한 공백을 넣지 마라. 실제 침묵 구간에서만 자막을 비워라.
-                    3. 자막 길이 제한: 하나의 자막 항목은 7초를 초과하지 마라.
-                    4. 문장 단위 분할: 한 자막에는 최대 1~2문장만 포함하라.
-                    5. 시간 순서 보장: start는 반드시 이전 자막의 end보다 같거나 커야 한다.
-                    6. 시간 형식: 반드시 "MM:SS" 형식(예: 01:23)으로 통일하라. 소수점 사용 금지.
+                    [🚨 자막 분할 원칙 — 드리프트 방지의 핵심]
+                    ★ 1 자막 = 1 발화 단위. 서로 다른 문장·발화를 절대 하나의 자막에 묶지 마라.
+                    ★ 발화 간 침묵이 0.3초 이상이면 반드시 자막 분리. 병합 금지.
+                    ★ 원문의 한 문장 당 자막 한 개 원칙.
+                    ★ 짧은 발화("Yeah", "Who are you" 등)는 실제 지속 시간(0.3~0.8초) 그대로 찍어라.
+
+                    [자막 타임라인 규칙]
+                    1. 시작과 끝 시간은 실제 발화의 밀리초 단위 정확한 시점. 대충 추정·반올림 금지.
+                    2. 침묵 구간은 자막 없이 비워둬라. 앞 자막의 end를 뒤 자막 start까지 늘리지 마라.
+                    3. 자막 길이 제한: 하나의 자막은 5초를 초과하지 마라. 5초 넘는 발화는 호흡 지점에서 분리.
+                    4. 최소 표시 시간 제한 없음: 실제 발화가 0.3초면 0.3초로 찍어라. 병합 방지.
+                    5. 한 자막에 최대 1문장만. 두 문장 이상이면 반드시 분리. 시간 순서 보장.
+                    6. ⭐️ 시간 형식 (매우 중요): 반드시 "HH:MM:SS.mmm" 형식(예: 00:00:03.250). 소수점 아래 3자리(밀리초). 정수 초 반올림·1초 grid 스냅 절대 금지.
                     7. 영상 끝까지 빠짐없이 추출하라.
 
                     [특수문자 금지]
@@ -2205,14 +2337,16 @@ ${allTranslations.join(' ')}`;
                 // SRT 파일 생성
                 function formatTimeForSrt(timeStr) {
                     if (!timeStr) return "00:00:00,000";
-                    const cleanStr = timeStr.replace(/[^0-9:]/g, '');
+                    const cleanStr = String(timeStr).replace(/[^0-9:.]/g, '');
                     const parts = cleanStr.split(':');
-                    let h = 0, m = 0, s = 0;
-                    if (parts.length === 3) { h = parseInt(parts[0], 10) || 0; m = parseInt(parts[1], 10) || 0; s = parseInt(parts[2], 10) || 0; }
-                    else if (parts.length === 2) { m = parseInt(parts[0], 10) || 0; s = parseInt(parts[1], 10) || 0; }
-                    else { s = parseInt(parts[0], 10) || 0; }
-                    const pad = (num) => String(num).padStart(2, '0');
-                    return `${pad(h)}:${pad(m)}:${pad(s)},000`;
+                    let h = 0, m = 0, sFloat = 0;
+                    if (parts.length === 3) { h = parseInt(parts[0], 10) || 0; m = parseInt(parts[1], 10) || 0; sFloat = parseFloat(parts[2]) || 0; }
+                    else if (parts.length === 2) { m = parseInt(parts[0], 10) || 0; sFloat = parseFloat(parts[1]) || 0; }
+                    else { sFloat = parseFloat(parts[0]) || 0; }
+                    const s = Math.floor(sFloat);
+                    const ms = Math.round((sFloat - s) * 1000);
+                    const pad = (num, n = 2) => String(num).padStart(n, '0');
+                    return `${pad(h)}:${pad(m)}:${pad(s)},${pad(ms, 3)}`;
                 }
 
                 let srtContent = '';
@@ -2400,6 +2534,274 @@ Input: ${koText}`;
                 }
             }
         });
+
+        // ─────────────────────────────────────────────────
+        // 8. URL 기반 영상 다운로드 (yt-dlp 로컬 서버 사용)
+        // ─────────────────────────────────────────────────
+        const YT_DLP_SERVER = 'http://localhost:4747';
+
+        // 서버 상태 점검 (헬스 체크)
+        async function checkYtDlpServer() {
+            const statusEl = document.getElementById('ytDlpServerStatus');
+            if (!statusEl) return false;
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 2000);
+                const res = await fetch(`${YT_DLP_SERVER}/health`, { signal: controller.signal });
+                clearTimeout(timeout);
+                if (res.ok) {
+                    statusEl.innerText = '🟢 서버 연결됨';
+                    statusEl.style.color = '#22c55e';
+                    return true;
+                }
+                throw new Error('not ok');
+            } catch (e) {
+                statusEl.innerText = '🔴 서버 꺼짐 (터미널에서 node yt-dlp-server.js 실행)';
+                statusEl.style.color = '#ef4444';
+                return false;
+            }
+        }
+        checkYtDlpServer();
+        // 주기적으로 재확인 (15초마다)
+        setInterval(checkYtDlpServer, 15000);
+
+        document.getElementById('downloadUrlBtn').addEventListener('click', async () => {
+            const urlInput = document.getElementById('videoUrlInput');
+            const btn = document.getElementById('downloadUrlBtn');
+            const progressBox = document.getElementById('urlDownloadProgress');
+            const progressBar = document.getElementById('urlDownloadBar');
+            const progressStatus = document.getElementById('urlDownloadStatus');
+
+            const url = urlInput.value.trim();
+            if (!url) {
+                alert('⚠️ 영상 URL을 입력하세요.');
+                return;
+            }
+            try {
+                new URL(url);
+            } catch (e) {
+                alert('⚠️ 올바른 URL이 아닙니다.');
+                return;
+            }
+
+            // 서버 확인
+            const alive = await checkYtDlpServer();
+            if (!alive) {
+                alert('❌ yt-dlp 로컬 서버에 연결할 수 없습니다.\n\n터미널에서 다음 명령어를 실행하세요:\n\n1) brew install yt-dlp  (최초 1회)\n2) node yt-dlp-server.js  (이 폴더에서)');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = '⏳ 다운로드 중...';
+            progressBox.style.display = 'block';
+            progressBar.style.width = '5%';
+            progressStatus.innerText = 'yt-dlp에 다운로드 요청 중...';
+
+            try {
+                const endpoint = `${YT_DLP_SERVER}/download?url=${encodeURIComponent(url)}`;
+                const res = await fetch(endpoint);
+
+                if (!res.ok) {
+                    const errText = await res.text();
+                    throw new Error(errText || `HTTP ${res.status}`);
+                }
+
+                progressBar.style.width = '30%';
+                progressStatus.innerText = '영상 받는 중...';
+
+                // Content-Length로 진행률 계산 (가능한 경우)
+                const totalLen = parseInt(res.headers.get('Content-Length') || '0', 10);
+                const reader = res.body.getReader();
+                const chunks = [];
+                let received = 0;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                    received += value.length;
+                    if (totalLen > 0) {
+                        const pct = 30 + Math.min(65, (received / totalLen) * 65);
+                        progressBar.style.width = `${pct}%`;
+                        progressStatus.innerText = `영상 받는 중... ${(received / 1024 / 1024).toFixed(1)} MB / ${(totalLen / 1024 / 1024).toFixed(1)} MB`;
+                    } else {
+                        progressStatus.innerText = `영상 받는 중... ${(received / 1024 / 1024).toFixed(1)} MB`;
+                    }
+                }
+
+                const blob = new Blob(chunks, { type: res.headers.get('Content-Type') || 'video/mp4' });
+
+                // 파일명 복원 (서버가 X-Original-Filename 헤더로 보내줌)
+                let filename = 'downloaded_video.mp4';
+                const origHeader = res.headers.get('X-Original-Filename');
+                if (origHeader) {
+                    try { filename = decodeURIComponent(origHeader); } catch (_) {}
+                }
+
+                const file = new File([blob], filename, { type: blob.type, lastModified: Date.now() });
+
+                // 기존 파일 입력과 동일한 방식으로 주입
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                videoFileInput.files = dataTransfer.files;
+                videoFileInput.dispatchEvent(new Event('change'));
+
+                progressBar.style.width = '100%';
+                progressStatus.innerText = `✅ 완료: ${filename} (${(blob.size / 1024 / 1024).toFixed(1)} MB). 이제 아래 추출 버튼을 누르세요.`;
+            } catch (err) {
+                console.error('[URL Download] 실패:', err);
+                progressBar.style.width = '0%';
+                progressBar.style.background = '#ef4444';
+                progressStatus.innerText = `❌ 실패: ${err.message}`;
+                alert(`다운로드 실패:\n\n${err.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = '⬇️ 다운로드';
+                // 7초 뒤 진행률 패널 복구
+                setTimeout(() => {
+                    progressBar.style.background = '#10b981';
+                    progressBox.style.display = 'none';
+                }, 7000);
+            }
+        });
+
+        // Enter 키로도 다운로드 가능
+        document.getElementById('videoUrlInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                document.getElementById('downloadUrlBtn').click();
+            }
+        });
+
+        // ─────────────────────────────────────────────────
+        // 9. 우측 상단 "현재 작업 영상" 썸네일 패널
+        //    videoFile change 이벤트에 훅 → 업로드/드롭/URL 다운로드 모두 반영
+        // ─────────────────────────────────────────────────
+        (function setupCurrentVideoThumbnail() {
+            const panel = document.getElementById('currentVideoPanel');
+            const thumbImg = document.getElementById('currentVideoThumb');
+            const spinner = document.getElementById('currentVideoSpinner');
+            const nameEl = document.getElementById('currentVideoName');
+            const metaEl = document.getElementById('currentVideoMeta');
+            const closeBtn = document.getElementById('currentVideoCloseBtn');
+
+            if (!panel) return;
+
+            let lastThumbBlobUrl = null;
+            let lastTmpVideoUrl = null;
+
+            function revokeLastUrls() {
+                if (lastThumbBlobUrl) { URL.revokeObjectURL(lastThumbBlobUrl); lastThumbBlobUrl = null; }
+                if (lastTmpVideoUrl) { URL.revokeObjectURL(lastTmpVideoUrl); lastTmpVideoUrl = null; }
+            }
+
+            function formatBytes(bytes) {
+                if (bytes < 1024) return bytes + ' B';
+                if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+                return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+            }
+
+            function generateThumbnail(file) {
+                if (!file) return;
+
+                // 패널 열고 스피너 표시
+                panel.style.display = 'block';
+                spinner.style.display = 'flex';
+                thumbImg.style.visibility = 'hidden';
+                nameEl.innerText = file.name;
+                metaEl.innerText = formatBytes(file.size);
+
+                revokeLastUrls();
+
+                const videoUrl = URL.createObjectURL(file);
+                lastTmpVideoUrl = videoUrl;
+
+                const tmpVideo = document.createElement('video');
+                tmpVideo.src = videoUrl;
+                tmpVideo.muted = true;
+                tmpVideo.preload = 'metadata';
+                tmpVideo.playsInline = true;
+
+                const cleanup = () => {
+                    try { tmpVideo.removeAttribute('src'); tmpVideo.load(); } catch (_) {}
+                };
+
+                tmpVideo.addEventListener('loadedmetadata', () => {
+                    // 첫 프레임이 검은 경우가 많으니 살짝 뒤로 seek
+                    const seekTime = Math.min(1.0, Math.max(0.1, (tmpVideo.duration || 1) * 0.05));
+                    try { tmpVideo.currentTime = seekTime; } catch (_) {}
+                }, { once: true });
+
+                tmpVideo.addEventListener('seeked', () => {
+                    try {
+                        const w = tmpVideo.videoWidth;
+                        const h = tmpVideo.videoHeight;
+                        if (!w || !h) throw new Error('no video dimensions');
+
+                        // 최대 360px 너비로 축소 (썸네일이라 작아도 충분)
+                        const maxW = 360;
+                        const scale = Math.min(1, maxW / w);
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.round(w * scale);
+                        canvas.height = Math.round(h * scale);
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(tmpVideo, 0, 0, canvas.width, canvas.height);
+
+                        canvas.toBlob((blob) => {
+                            if (!blob) { spinner.innerText = '썸네일 실패'; return; }
+                            const thumbUrl = URL.createObjectURL(blob);
+                            thumbImg.src = thumbUrl;
+                            thumbImg.style.visibility = 'visible';
+                            spinner.style.display = 'none';
+                            lastThumbBlobUrl = thumbUrl;
+
+                            // 해상도·길이 정보도 메타에 추가
+                            const dur = tmpVideo.duration;
+                            const mm = Math.floor(dur / 60);
+                            const ss = Math.floor(dur % 60).toString().padStart(2, '0');
+                            metaEl.innerText = `${w}×${h} · ${mm}:${ss} · ${formatBytes(file.size)}`;
+
+                            // 더 이상 필요 없는 tmp 비디오 URL 해제
+                            if (lastTmpVideoUrl) { URL.revokeObjectURL(lastTmpVideoUrl); lastTmpVideoUrl = null; }
+                            cleanup();
+                        }, 'image/jpeg', 0.85);
+                    } catch (err) {
+                        spinner.innerText = '썸네일 실패';
+                        console.warn('[Thumbnail] 생성 실패:', err);
+                        cleanup();
+                    }
+                }, { once: true });
+
+                tmpVideo.addEventListener('error', () => {
+                    spinner.innerText = '영상을 읽을 수 없음';
+                    console.warn('[Thumbnail] video element error');
+                    cleanup();
+                });
+            }
+
+            // change 이벤트는 이미 다른 리스너가 걸려있음 → 추가 리스너로 붙임 (경쟁하지 않음)
+            document.getElementById('videoFile').addEventListener('change', function() {
+                const file = this.files && this.files[0];
+                if (file) generateThumbnail(file);
+            });
+
+            // × 버튼: 패널 숨김 (영상 자체는 그대로 유지)
+            closeBtn.addEventListener('click', () => {
+                panel.style.display = 'none';
+            });
+
+            // 썸네일 클릭 시 원본 영상 이름 복사 (가볍게 확인용)
+            thumbImg.addEventListener('click', () => {
+                // 원본 크기로 잠깐 키우기 (다시 누르면 원래대로)
+                if (panel.style.width === '200px' || !panel.style.width) {
+                    panel.style.width = '360px';
+                } else {
+                    panel.style.width = '200px';
+                }
+            });
+            thumbImg.style.cursor = 'zoom-in';
+            thumbImg.title = '클릭하여 크게/작게';
+        })();
     </script>
 
     <!-- 워터마크 기능 -->
